@@ -1225,6 +1225,68 @@ This uses the |list filter to convert the generator to a list before accessing t
 
 ## HOW TO FEED A TABLE FROM DJANGO ADMIN PANEL, OPEN IN AS BLOCK INTO WAGTAIL ADMIN PANEL AND RENDER IT INTO THE WAGTAIL FRONTEND 
 
+Premessa: prima di effettuare questa complessa operazione va tenuto in conto che i due progetti uno django e l'altro wagtail derivano da due repository differenti. Quindi il problema iniziale sarà quello di renedere omogenei i file .git. Per fare ciò dunque di seguito si descrive il metodo migliore individuato:
+
+If you want to consolidate both the Django and Wagtail projects into a single Git repository, and you've already initialized separate repositories in each project's directory, you have a couple of options:
+
+Option 1: Delete Existing Git Repositories
+
+1. **Delete Git repositories in directory and subdirectories:**
+
+   - Navigate to each subdirectory (e.g., `django_general_template2` and `blog_wiki_wag/blog_page_wiki_wag/wiki-wag`) containing a Git repository.
+   - Run `rm -rf .git` to delete the existing Git repository.
+
+2. **Initialize a new Git repository in the root directory:**
+
+   - Run `cd /path/to/django_general_template2` (replace `/path/to/django_general_template2` with your actual path).
+   - Run `git init` to initialize a new Git repository.
+
+3. **Add, commit, and push:**
+
+   - Add all files with `git add .`.
+   - Commit the changes with `git commit -m "Initial commit"`.
+   - If you've already set up a remote repository, push the changes to it.
+
+   Great! Since you've deleted the existing Git repositories and initialized a new one in the root directory, here are the steps to create a new GitHub repository (`django-wiki-wag`) and push your local changes to it:
+
+   1. **Create a New GitHub Repository:**
+
+      - Go to [GitHub](https://github.com/).
+      - Log in to your account.
+      - Click the "+" icon in the top right corner and select "New repository."
+      - Fill in the repository name (e.g., `django-wiki-wag`), add a description if you want, and choose other repository settings.
+      - Click "Create repository."
+
+   2. **Set the Remote Origin for Your Local Repository:**
+
+      - In your local terminal, navigate to the root directory of your project.
+
+      - Run the following commands, replacing the repository URL with your newly created repository URL:
+
+        ```
+        bashCopy code
+        git remote add origin https://github.com/your-username/django-wiki-wag.git
+        ```
+
+   3. **Add, Commit, and Push:**
+
+      - Run the following commands to add all files, commit your changes, and push to GitHub:
+
+        ```
+        bashCopy codegit add .
+        git commit -m "Initial commit"
+        git push -u origin main
+        ```
+
+      - Note: Replace `main` with the name of the branch you are working on (it could be `master` or another branch).
+
+   4. **Verify on GitHub:**
+
+      - Visit your GitHub repository (`https://github.com/your-username/django-wiki-wag`).
+      - Confirm that your files and project structure are visible.
+
+   Now, your local project should be synchronized with the new GitHub repository. If you encounter any issues during the process, feel free to ask for further assistance!
+
 To achieve your goal, you'll need to follow a series of steps. I'll provide you with a step-by-step guide to make the necessary changes and additions to your Django admin, Wagtail models, and HTML template.
 
 - **Step 1: Adjust Wagtail Settings**
