@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% load wagtailcore_tags %}
+{% load static %}
+
+
+{% block content %}
+   <article>
+       <h2 id='toc'>Table of Contents</h2>
+       <ol>
+           {% for block in page.body %}
+               {% if block.block_type == 'heading' %}
+                   <li><a href='#{{ block.value|slugify }}'>{{ block.value }}</a></li>
+               {% endif %}
+           {% endfor %}
+       </ol>
+
+       {% if page.content_choice == 'choice_one' %}
+           <p>
+               Lorem ipsum dolor sit amet, consectetur adipiscing elit...
+           </p>
+       {% elif page.content_choice == 'choice_two' %}
+           <p>
+               Praesent quis erat nec justo semper rutrum...
+           </p>
+       {% endif %}
+
+
+       {% for block in page.body %}
+           {% if block.block_type == 'table' %}
+               <div class="table-responsive">
+                   <table class="table table-bordered table-striped">
+                       <thead>
+                           <tr>
+                               {% for column in block.value.columns %}
+                               <th>{{ column.heading|default:"Column Header" }}</th>
+                           {% endfor %}
+                           </tr>
+                       </thead>
+                       <tbody>
+                           {% for row in block.value.rows %}
+                               <tr>
+                                   {% for cell in row %}
+                                       <td>{{ cell }}</td>
+                                   {% endfor %}
+                               </tr>
+                           {% endfor %}
+                       </tbody>
+                   </table>
+               </div>
+               <hr>
+           {% elif block.block_type == 'heading' %}
+               <hr>
+               <h2 id='{{ block.value|slugify }}'><a href='#{{ block.value|slugify }}'>{{ block.value }}</a></h2>
+           {% elif block.block_type == 'publication' %}
+               {% include_block block %}
+               <hr>
+           {% else %}
+               <section class="{{ block.block_type }}">
+                   {% include_block block %}
+                   <p><a href='#toc'><u>↑ table of contents</u></a></p>
+               </section>
+           {% endif %}
+       {% endfor %}
+   </article>
+
+   <script>
+    // Vanilla JavaScript code for handling dynamic content
+    document.addEventListener('DOMContentLoaded', function () {
+        // Function to update content based on dropdown selection
+        function updateContent() {
+            var selectedOption = document.getElementById('contentChoice').value;
+            var dynamicContentContainer = document.getElementById('dynamicContent');
+
+            if (selectedOption === 'choice_one') {
+                dynamicContentContainer.innerHTML = '<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit...</p>';
+            } else if (selectedOption === 'choice_two') {
+                dynamicContentContainer.innerHTML = '<p>Praesent quis erat nec justo semper rutrum...</p>';
+            }
+        }
+
+        // Initial update on page load
+        updateContent();
+
+        // Event listener for dropdown change
+        document.getElementById('contentChoice').addEventListener('change', updateContent);
+    });
+</script>
+{% endblock %}

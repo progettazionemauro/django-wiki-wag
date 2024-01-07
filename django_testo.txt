@@ -1,0 +1,37 @@
+.
+├── db.sqlite3
+├── django_testo.txt
+├── general_template1
+│   ├── asgi.py
+│   ├── __init__.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+├── manage.py
+└── sgq
+    ├── admin.py
+    ├── apps.py
+    ├── forms.py
+    ├── __init__.py
+    ├── models.py
+    ├── templates
+    │   ├── auditor_list.html
+    │   ├── create_schema_certificativo.html
+    │   ├── delete_schema_certificativo.html
+    │   ├── home.html
+    │   ├── schema_certificativo_detail.html
+    │   ├── schema_certificativo_list.html
+    │   └── update_schema_certificativo.html
+    ├── tests.py
+    ├── urls.py
+    ├── utilities
+    │   ├── chat_gpt_scrape_non_funzionante.py
+    │   ├── cppy_and_paste_in_text_document.py
+    │   ├── directory_tree_gui.py
+    │   ├── django_general_template2.code-workspace
+    │   ├── hotkey_hello_world.py
+    │   └── storage
+    │       └── selected_text.txt
+    └── views.py
+
+5 directories, 29 files

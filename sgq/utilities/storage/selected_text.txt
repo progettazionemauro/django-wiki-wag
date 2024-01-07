@@ -1,0 +1,408 @@
+To modify your code to use the xclip package instead of the default clipboard mechanism provided by Pyperclip, you need to make a few adjustments. Here's an updated version of your code:
+
+python
+Copy code
+import subprocess
+
+# Copy the selected text using xclip
+subprocess.run(['xclip', '-selection', 'clipboard', '-o'], capture_output=True, text=True)
+selected_text = subprocess.run(['xclip', '-selection', 'clipboard', '-o'], capture_output=True, text=True, check=True).stdout.strip()
+
+# Append the selected text to the file
+file_path = '/home/mauro/Scrivania/django_general_template2/sgq/utilities/storage/selected_text.txt'
+with open(file_path, 'a') as file:
+    file.write(selected_text + '\n')
+In this modified version, the subprocess module is used to execute the xclip command and capture the output. The -selection clipboard option specifies that the command should operate on the clipboard selection.
+
+Make sure to replace '/home/mauro/Scrivania/django_general_template2/sgq/utilities/storage/selected_text.txt' with the desired file path where you want to append the selected text.
+
+Now, when you run this code, it should use xclip to copy the selected text from the clipboard and write it to the specified text file.
+
+Note: Ensure that you have the xclip package installed on your Ubuntu system before executing this code. You can install it using the command sudo apt-get install xclip.
+Certainly! Here's a breakdown of the modified code that utilizes xclip:
+
+python
+Copy code
+import subprocess
+First, we import the subprocess module, which allows us to run shell commands from within Python.
+
+python
+Copy code
+subprocess.run(['xclip', '-selection', 'clipboard', '-o'], capture_output=True, text=True)
+Here, we execute the xclip command with the options -selection clipboard -o. This command reads the contents of the clipboard and discards the output. We use subprocess.run() to execute the command.
+
+python
+Copy code
+selected_text = subprocess.run(['xclip', '-selection', 'clipboard', '-o'], capture_output=True, text=True, check=True).stdout.strip()
+In this line, we run the xclip command again to retrieve the selected text from the clipboard. The stdout attribute of the subprocess.run() result contains the captured output, which we assign to the selected_text variable. We use the strip() method to remove any leading or trailing whitespace.
+
+python
+Copy code
+file_path = '/home/mauro/Scrivania/django_general_template2/sgq/utilities/storage/selected_text.txt'
+Here, we define the file path where we want to append the selected text. Make sure to replace this path with your desired file path.
+
+python
+Copy code
+with open(file_path, 'a') as file:
+    file.write(selected_text + '\n')
+Finally, we open the specified file in append mode ('a') using a with statement. This ensures that the file is properly closed after writing. We use the write() method to append the selected_text followed by a newline character ('\n') to the file.
+
+This breakdown should help you understand each step of the code and how it utilizes xclip to copy the selected text and write it to the specified file.
+
+User
+OK now I want add to this code a long breaking leading line for any append
+
+ChatGPT
+To add a line break before appending each selected text to the file, you can modify the code as follows:
+
+python
+Copy code
+import subprocess
+
+file_path = '/home/mauro/Scrivania/django_general_template2/sgq/utilities/storage/selected_text.txt'
+
+# Copy the selected text using xclip
+subprocess.run(['xclip', '-selection', 'clipboard', '-o'], capture_output=True, text=True)
+selected_text = subprocess.run(['xclip', '-selection', 'clipboard', '-o'], capture_output=True, text=True, check=True).stdout.strip()
+
+# Append the selected text to the file with a line break
+with open(file_path, 'a') as file:
+    file.write('\n' + selected_text + '\n')
+In this updated version, '\n' is added before and after the selected_text when writing it to the file. This ensures that each selected text is appended on a new line with a line break before and after it.
+
+Please note that the modified code assumes that there is an existing file at the specified file_path. If the file doesn't exist, it will be created. Make sure to adjust the file_path variable according to your desired file location.
+
+With this modification, each time you run the code, it will copy the selected text using xclip and append it to the file with a line break before and after the text.
+
+____________________
+OK but i can't see the line in the text file specifically i want before and afetr an append a long line something like this "___________________"
+
+ChatGPT
+If you want to add a long line of underscores before and after each appended text in the text file, you can modify the code as follows:
+
+python
+Copy code
+import subprocess
+
+file_path = '/home/mauro/Scrivania/django_general_template2/sgq/utilities/storage/selected_text.txt'
+
+# Copy the selected text using xclip
+subprocess.run(['xclip', '-selection', 'clipboard', '-o'], capture_output=True, text=True)
+selected_text = subprocess.run(['xclip', '-selection', 'clipboard', '-o'], capture_output=True, text=True, check=True).stdout.strip()
+
+# Append the selected text to the file with a line of underscores before and after
+with open(file_path, 'a') as file:
+    file.write('\n' + '_' * 20 + '\n')  # Line of underscores before the text
+    file.write(selected_text + '\n')
+    file.write('_' * 20 + '\n')  # Line of underscores after the text
+In this updated code, '\n' is used to create a new line, and '_ * 20 is used to generate a line of underscores that repeats 20 times.
+
+Adjust the value 20 in '_ * 20' to control the length of the line of underscores. You can increase or decrease the number to make it longer or shorter according to your preference.
+
+Now, when you run this code, it will copy the selected text using xclip, and each time it appends the text to the file, it will include a line of underscores before and after the text for visual separation.
+____________________
+    
+________________________________________OOOOOOOOOO----------------------------------------
+import subprocess
+import tkinter as tk
+from pynput import keyboard
+
+file_path = '/home/mauro/Scrivania/django_general_template2/sgq/utilities/storage/selected_text.txt'
+ctrl_pressed = False
+
+def copy_selected_text():
+    try:
+        # Copy the selected text using xclip
+        subprocess.run(['xclip', '-selection', 'clipboard', '-o'], capture_output=True, text=True)
+        selected_text = subprocess.run(['xclip', '-selection', 'clipboard', '-o'], capture_output=True, text=True, check=True).stdout.strip()
+
+        # Append the selected text to the file
+        with open(file_path, 'a') as file:
+            file.write('\n' + '_' * 40 + 'OOOOOOOOOO' + '-' * 40 + '\n')  # Line of underscores before the text
+            file.write(selected_text + '\n')
+            file.write('_' * 20 + '\n')  # Line of underscores after the text
+
+        message_var.set("Text copied and appended!")  # Update message variable
+    except Exception as e:
+        message_var.set("Error: " + str(e))  # Update message variable
+
+def on_key_press(key):
+    global ctrl_pressed
+
+    if key == keyboard.Key.ctrl_l:
+        ctrl_pressed = True
+
+    if key == keyboard.KeyCode.from_char('c'):
+        if ctrl_pressed:
+            copy_selected_text()
+
+def on_key_release(key):
+    global ctrl_pressed
+
+    if key == keyboard.Key.ctrl_l:
+        ctrl_pressed = False
+
+# Create GUI window
+window = tk.Tk()
+window.title("Copy and Paste Text")
+window.geometry("500x400")  # Set the size of the window (width x height)
+window.configure(bg="#002300")  # Set the background color of the window
+
+# Create message variable
+message_var = tk.StringVar()
+message_var.set("Press Ctrl+C to copy and append selected text.")
+
+# Create label
+label = tk.Label(window, textvariable=message_var)
+label.pack()
+
+# Start listener for key presses and releases
+with keyboard.Listener(on_press=on_key_press, on_release=on_key_release) as listener:
+    try:
+        # Start the GUI event loop
+        window.mainloop()
+    except KeyboardInterrupt:
+        # Stop the listener when Ctrl+C is pressed
+        listener.stop()
+____________________
+
+________________________________________OOOOOOOOOO----------------------------------------
+User
+hurra! now it is working right. So now to coclude can you breakdown the code?
+ChatGPT
+Certainly! Here's a breakdown of the code:
+
+Import the necessary modules:
+
+subprocess module for running shell commands.
+tkinter module for creating the GUI window.
+pynput.keyboard for capturing keyboard events.
+Set the file path where the selected text will be appended.
+
+Create a Boolean variable ctrl_pressed to keep track of whether the Ctrl key is currently pressed.
+
+Define the copy_selected_text() function:
+
+This function is responsible for copying the selected text and appending it to the file.
+It uses the subprocess.run() function to execute the xclip command and retrieve the selected text from the clipboard.
+The selected text is then appended to the file specified by file_path.
+Define the on_key_press() function:
+
+This function is called when a key is pressed.
+It sets the ctrl_pressed variable to True if the Ctrl key is pressed.
+If the pressed key is Ctrl+C, and the Ctrl key is currently pressed, it calls the copy_selected_text() function.
+Define the on_key_release() function:
+
+This function is called when a key is released.
+It sets the ctrl_pressed variable to False when the Ctrl key is released.
+Create the GUI window using tkinter:
+
+Create a Tk object and set the window title and geometry.
+Set the background color of the window.
+Create a StringVar variable called message_var to store the success or error message.
+
+Create a label widget to display the message in the GUI window.
+
+Start the listener for key presses and releases using pynput.keyboard.Listener:
+
+Pass the on_key_press and on_key_release functions as the callbacks for key events.
+Inside the listener context, start the GUI event loop using window.mainloop().
+If Ctrl+C is pressed, the listener calls the corresponding functions, which update the message_var with the success or error message.
+
+If Ctrl+C is pressed outside the listener context or the program is terminated with Ctrl+C, the listener is stopped using listener.stop().
+
+That's the breakdown of the code. It sets up a GUI window and captures the Ctrl+C keyboard combination to copy the selected text and append it to a file. The success or error message is displayed in the GUI.
+____________________
+
+________________________________________OOOOOOOOOO----------------------------------------
+To run the code cppy_and_paste_in_text_document.py when you press Ctrl+C, you can modify the existing code as follows:
+
+Import the subprocess module at the beginning of your main code.
+
+Inside the copy_selected_text() function in your main code, add the following line to run cppy_and_paste_in_text_document.py using subprocess.run():
+
+python
+Copy code
+subprocess.run(['python3', '/home/mauro/Scrivania/django_general_template2/sgq/utilities/cppy_and_paste_in_text_document.py'])
+Remove the import statements for subprocess and tkinter modules from cppy_and_paste_in_text_document.py since those modules are already imported in your main code.
+
+Update the copy_selected_text() function in cppy_and_paste_in_text_document.py to remove the subprocess calls for copying the selected text and appending it to the file since this will be handled by the main code.
+
+Here's the modified code:
+
+python
+Copy code
+import subprocess
+import tkinter as tk
+from pynput import keyboard
+
+file_path = '/home/mauro/Scrivania/django_general_template2/sgq/utilities/storage/selected_text.txt'
+ctrl_pressed = False
+
+def copy_selected_text():
+    try:
+        # Run the cppy_and_paste_in_text_document.py script
+        subprocess.run(['python3', '/home/mauro/Scrivania/django_general_template2/sgq/utilities/cppy_and_paste_in_text_document.py'])
+
+        message_var.set("Text copied and appended!")  # Update message variable
+    except Exception as e:
+        message_var.set("Error: " + str(e))  # Update message variable
+
+def on_key_press(key):
+    global ctrl_pressed
+
+    if key == keyboard.Key.ctrl_l:
+        ctrl_pressed = True
+
+    if key == keyboard.KeyCode.from_char('c'):
+        if ctrl_pressed:
+            copy_selected_text()
+
+def on_key_release(key):
+    global ctrl_pressed
+
+    if key == keyboard.Key.ctrl_l:
+        ctrl_pressed = False
+
+# Create GUI window
+window = tk.Tk()
+window.title("Copy and Paste Text")
+window.geometry("500x400")  # Set the size of the window (width x height)
+window.configure(bg="#002300")  # Set the background color of the window
+
+# Create message variable
+message_var = tk.StringVar()
+message_var.set("Press Ctrl+C to copy and append selected text.")
+
+# Create label
+label = tk.Label(window, textvariable=message_var)
+label.pack()
+
+# Start listener for key presses and releases
+with keyboard.Listener(on_press=on_key_press, on_release=on_key_release) as listener:
+    try:
+        # Start the GUI event loop
+        window.mainloop()
+    except KeyboardInterrupt:
+        # Stop the listener when Ctrl+C is pressed
+        listener.stop()
+With these modifications, when you select the needed text and press Ctrl+C, the cppy_and_paste_in_text_document.py script will be executed, automatically appending the text.
+____________________
+
+________________________________________OOOOOOOOOO----------------------------------------
+The other closing activities can be carried out in the back office in your office
+____________________
+
+________________________________________OOOOOOOOOO----------------------------------------
+please send me the report at the latest the day after the audit
+____________________
+
+________________________________________OOOOOOOOOO----------------------------------------
+/api/copy-and-paste
+____________________
+
+________________________________________OOOOOOOOOO----------------------------------------
+Pallav GOGOI
+21 giu
+
+Modificato
+
+@28
+Visualizzato da 14.595 persone
+#BVTrustMakers | Congratulations to the CIF Global-SSC employees who have reached their long service milestone of 5 years and 10 years in Bureau Veritas. They have been instrumental in shaping CIF Global-SSC and setting new benchmarks for the newer employees. The awardees were further delighted and motivated as they received their awards from Vincent Bourdil, Executive Vice President - Global Business Lines and Performance, and Nathalie Pousin, Senior Vice President - GSL Commodities, who were in India. Thank you!
+
+Mostra traduzione
+Immagine allegata - Nessuna descrizione impostata
+Immagine allegata - Nessuna descrizione impostata
+Immagine allegata - Nessuna descrizione impostata
+Immagine allegata - Nessuna descrizione impostata
++ altri 4
+
+
+
+
+
+
+Remi VILLALONGUE e 53 altri utenti
+
+Visualizzare 2 commenti precedenti
+2 nuovi
+Nuovo, Santosh Kumar PATIL, Congratulations!
+SP
+
+
+
+1
+Santosh Kumar PATIL
+Ieri alle 05:43
+Congratulations!
+____________________
+
+________________________________________OOOOOOOOOO----------------------------------------
+Pallav GOGOI
+21 giu
+
+Modificato
+
+@28
+Visualizzato da 14.595 persone
+#BVTrustMakers | Congratulations to the CIF Global-SSC employees who have reached their long service milestone of 5 years and 10 years in Bureau Veritas. They have been instrumental in shaping CIF Global-SSC and setting new benchmarks for the newer employees. The awardees were further delighted and motivated as they received their awards from Vincent Bourdil, Executive Vice President - Global Business Lines and Performance, and Nathalie Pousin, Senior Vice President - GSL Commodities, who were in India. Thank you!
+
+Mostra traduzione
+Immagine allegata - Nessuna descrizione impostata
+Immagine allegata - Nessuna descrizione impostata
+Immagine allegata - Nessuna descrizione impostata
+Immagine allegata - Nessuna descrizione impostata
++ altri 4
+
+
+
+
+
+
+Remi VILLALONGUE e 53 altri utenti
+
+Visualizzare 2 commenti precedenti
+2 nuovi
+Nuovo, Santosh Kumar PATIL, Congratulations!
+SP
+
+
+
+1
+Santosh Kumar PATIL
+Ieri alle 05:43
+Congratulations!
+____________________
+
+________________________________________OOOOOOOOOO----------------------------------------
+/api/copy-and-paste
+____________________
+
+________________________________________OOOOOOOOOO----------------------------------------
+Fanta was born in Europe, with the brand created by The Coca-Cola Company in Germany during World War II due to difficulties in sourcing the original Coca-Cola syrup. Initially, it was produced using whey and apple cider. The version we know with oranges is entirely Italian: it was invented in 1955 in Naples at the SNIBEG - Società Napoletana Imbottigliamento Bevande Gassate plant.
+____________________
+
+________________________________________OOOOOOOOOO----------------------------------------
+Fanta was born in Europe, with the brand created by The Coca-Cola Company in Germany during World War II due to difficulties in sourcing the original Coca-Cola syrup. Initially, it was produced using whey and apple cider. The version we know with oranges is entirely Italian: it was invented in 1955 in Naples at the SNIBEG - Società Napoletana Imbottigliamento Bevande Gassate plant.
+____________________
+
+________________________________________OOOOOOOOOO----------------------------------------
+/api/copy-and-paste'
+____________________
+
+________________________________________OOOOOOOOOO----------------------------------------
+# combinazione di tasti
+import subprocess
+import tkinter as tk
+from pynput import keyboard
+
+file_path = '/home/mauro/Scrivania/django_general_template2/sgq/utilities/storage/selected_text.txt'
+ctrl_pressed = False
+
+def copy_selected_text():
+    try:
+        # Copy the selected text using xclip
+        subprocess.run(['xclip', '-selection', 'clipboard', '-o'], capture_output=True, text=True)
+        selected_text = subprocess.run(['xclip', '-selection', 'clipboard', '-o'], capture_output=True, text=True, check=True).stdout.strip()
+____________________

@@ -1,0 +1,212 @@
+from django.contrib import admin
+
+# Register your models here.
+from django.forms.widgets import TextInput
+from django import forms
+from .models import *
+
+
+
+@admin.register(SchemaCertificativo)
+class SchemaCertificativoAdmin(admin.ModelAdmin):
+    pass
+
+@admin.register(Auditor)                # registrazione in admin del widget per l'inseimento del n° telefonico
+class AuditorAdmin(admin.ModelAdmin):
+    # list_display=["nome_auditor", "email_auditor", "cellulare_auditor", "Link_schema_certificativo", "disponibile"]
+    # list_editable=('disponibile',)
+    # form = PhoneForm
+    
+    def Link_schema_certificativo(self, obj):
+       # return format_html('<a  href="https://127.0.0.1:8000/product/{0}" >{1}</a>',obj.id, obj.email_auditor) #url con parametri
+        return format_html('<a  href="https://en.wikipedia.org/wiki/Nigeria" >{1}</a>',obj.id, obj.email_auditor)
+from django.apps import AppConfig
+
+
+class SgqConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'sgq'
+from django import forms
+from django.db import models
+from .models import SchemaCertificativo, Auditor
+
+class SchemaForm(forms.Form):
+    schema_certificazione = models.CharField(max_length=300, unique=True) 
+
+class SchemaCertificativoForm(forms.ModelForm):
+    class Meta:
+        model = SchemaCertificativo
+        fields = '__all__'  # Include all fields from the model
+
+class AuditorForm(forms.ModelForm):
+    class Meta:
+        model = Auditor
+        fields = '__all__'  # Include all fields from the model
+    
+from django.db import models
+
+# from phonenumber_field.modelfields import PhoneNumberField
+# from location_field.models.plain import PlainLocationField
+
+""" class Place(models.Model):  
+    city = models.CharField(max_length=255)
+    location = PlainLocationField(based_fields=['city'], zoom=7) """
+
+
+
+""" class SampleModel(models.Model):
+    address = AddressField(max_length=100)
+    geolocation = GeoLocationField(blank=True)
+
+    def __str__(self):
+        return self.address """
+
+class SchemaCertificativo(models.Model): #registrato
+    
+    schema_certificazione = models.CharField(max_length=300, unique=True) 
+    class Meta:
+        verbose_name_plural="Schema Certificativo"
+
+    def __str__(self):
+        return self.schema_certificazione
+
+class Auditor(models.Model): #registration
+    
+    nome_auditor = models.CharField(max_length=300, unique=True) # fare attenzione: nel momento in cui si sostituisce il database è necessario inserire o il valore di default oppure blank and null: vedere qui stackoverflow: https://stackoverflow.com/a/73509787/11233866       
+    email_auditor=models.EmailField(max_length=254)
+    # cellulare_auditor=PhoneNumberField()
+    schema_certificativo=models.ManyToManyField(SchemaCertificativo)
+    disponibile = models.BooleanField(default=True)
+    foto = models.FileField(blank=True, default="default.jpg")
+    
+    class Meta:
+        verbose_name = 'Auditor'
+        verbose_name_plural = 'Auditor'
+
+    def __str__(self):
+        return f"{self.nome_auditor}"<h2>Elenco Auditor</h2>
+<ul>
+  {% for auditor in object_list %}
+    <li>
+      <p>ID NUMERO: {{ auditor.id }}</p>
+      <p>Nome: {{ auditor.nome_auditor }}</p>
+      <p>Email: {{ auditor.email_auditor }}</p> 
+      <!-- Display other attributes as needed -->
+    </li>
+  {% empty %}
+    <li>Non ho trovato auditors.</li>
+  {% endfor %}
+</ul><h2>Create Schema Certificativo</h2>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Create</button>
+</form>
+<h2>Delete Schema Certificativo</h2>
+<p>Are you sure you want to delete "{{ schema_certificativo }}"?</p>
+<form method="post">
+  {% csrf_token %}
+  <button type="submit">Delete</button>
+</form><!DOCTYPE html>
+<html>
+<head>
+    <title>Home Page</title>
+</head>
+<body>
+    <h1>Welcome to the Home Page</h1>
+    <ul>
+        <li><a href="/schema_certificativo/">Schema Certificativo List</a></li>
+        <li><a href="/auditor_list/">Auditor List</a></li>
+        <li><a href="/schema_certificativo/create/">Create Schema Certificativo</a></li>
+    </ul>
+</body>
+</html>
+{% for schema in object_list %}
+    <h2>{{ schema.title }}</h2>
+    <p>{{ schema.description }}</p>
+    <!-- Display other attributes as needed -->
+{% endfor %}<h2>Schemi Certificativi</h2>
+<ul>
+  {% for schema in object_list %}
+<h2>{{ schema.title }}</h2>
+<p>ID NUMERO: {{ schema.id }} - {{ schema.schema_certificazione }}</p>
+
+
+ {% empty %}
+    <li> Schemi non presenti.</li>
+  {% endfor %}
+</ul><h2>Update Schema Certificativo</h2>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Update</button>
+</form>from django.test import TestCase
+
+# Create your tests here.
+from django.urls import path
+from .views import (home_page,
+                    SchemaCertificativoListView, 
+                    SchemaCertificativoDetailView, 
+                    AuditorListView,
+                    
+)
+from .views import create_schema_certificativo, update_schema_certificativo, delete_schema_certificativo
+
+urlpatterns = [
+    path('', home_page, name='home'),
+    path('schema_certificativo/', SchemaCertificativoListView.as_view(), name='schema_certificativo_list'),
+    path('schema_certificativo/<int:pk>/', SchemaCertificativoDetailView.as_view(), name='schema_certificativo_detail'),
+    path('auditor_list/', AuditorListView.as_view(), name='auditor_list'),
+    path('schema_certificativo/create/', create_schema_certificativo, name='create_schema_certificativo'),
+    path('schema_certificativo/update/<int:pk>/', update_schema_certificativo, name='update_schema_certificativo'),
+    path('schema_certificativo/delete/<int:pk>/', delete_schema_certificativo, name='delete_schema_certificativo'),
+    
+]
+from django.shortcuts import render, redirect
+from django.views.generic import ListView, DetailView
+from .models import SchemaCertificativo, Auditor
+from .forms import SchemaCertificativoForm, AuditorForm
+
+def home_page(request):
+    return render(request, 'home.html')
+
+class SchemaCertificativoListView(ListView):
+    model = SchemaCertificativo
+    template_name = 'schema_certificativo_list.html'
+
+class SchemaCertificativoDetailView(DetailView):
+    model = SchemaCertificativo
+    template_name = 'schema_certificativo_detail.html'
+    
+class AuditorListView(ListView):
+    model=Auditor
+    template_name='auditor_list.html'
+
+# Views for forms
+def create_schema_certificativo(request):
+    if request.method == 'POST':
+        form = SchemaCertificativoForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('schema_certificativo_list')
+    else:
+        form = SchemaCertificativoForm()
+    return render(request, 'create_schema_certificativo.html', {'form': form})
+
+def update_schema_certificativo(request, pk):
+    schema_certificativo = SchemaCertificativo.objects.get(pk=pk)
+    if request.method == 'POST':
+        form = SchemaCertificativoForm(request.POST, instance=schema_certificativo)
+        if form.is_valid():
+            form.save()
+            return redirect('schema_certificativo_list')
+    else:
+        form = SchemaCertificativoForm(instance=schema_certificativo)
+    return render(request, 'update_schema_certificativo.html', {'form': form, 'pk': pk})
+
+def delete_schema_certificativo(request, pk):
+    schema_certificativo = SchemaCertificativo.objects.get(pk=pk)
+    if request.method == 'POST':
+        schema_certificativo.delete()
+        return redirect('schema_certificativo_list')
+    return render(request, 'delete_schema_certificativo.html', {'schema_certificativo': schema_certificativo})

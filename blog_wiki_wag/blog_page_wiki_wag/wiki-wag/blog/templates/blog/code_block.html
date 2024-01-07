@@ -1,0 +1,26 @@
+<!-- Define the styling for the code blocks -->
+<style>
+    pre {
+        background-color: #1F618D; /* light grey background */
+        color: #FAFAFA; /* white text */
+        padding: 10px;
+        border-radius: 4px;
+        overflow-x: auto;
+    }
+
+    code {
+        background-color: transparent;
+        color: #000000; /* black bk */
+        display: block;
+        white-space: pre-wrap;
+    }
+
+    code strong {
+        color: #FFFFFF;
+        font-weight: normal;
+    }
+</style>
+
+<!-- Render the code within <pre><code> tags to preserve whitespace and line breaks -->
+<pre><code>{{ self.code|linebreaks }}</code></pre>
+

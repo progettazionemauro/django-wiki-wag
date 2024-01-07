@@ -1,0 +1,2269 @@
+`In this big wiki I want you lear how to configure a django app i`n a digitalocean droplet. This is a very tricky argument mi. Moreover, I suppose in this first step the we have already a flask droplet and investigate how to create on the same droplet also a flask project. Let's start.
+
+Before to start we have to understand to big pieces of the puzzle: nginx and gunicorn. Here is little recap:
+
+**1\. Nginx:** Nginx is a web server and reverse proxy server that's often used as a front-end proxy for web applications. It's designed to handle tasks like serving static content, load balancing, SSL termination, and proxying requests to backend application servers. When it comes to deploying web applications, Nginx is often used to efficiently handle incoming HTTP/HTTPS requests and distribute them to the appropriate backend application server (like Gunicorn or uWSGI).
+
+**2\. Gunicorn:** Gunicorn (short for Green Unicorn) is a Python Web Server Gateway Interface (WSGI) HTTP server. It's used to serve Python web applications, like those built using Flask and Django. Gunicorn takes care of handling HTTP requests, serving your application code, and managing the number of worker processes to achieve concurrency.Let's break down the concepts of WSGI, Socket.IO, and their relationship with Gunicorn and uWSGI.
+
+**WSGI (Web Server Gateway Interface)**: WSGI is a specification that defines how web servers communicate with Python web applications. It provides a standard interface between web servers and Python web frameworks like Flask and Django. WSGI allows you to write your web application in a way that is independent of the specific web server being used. It enables the separation of the application logic from the web server logic. Both Gunicorn and uWSGI are WSGI servers that can serve Python web applications according to the WSGI specification.
+
+**Gunicorn (Green Unicorn)**: Gunicorn is a WSGI HTTP server. It is designed to serve Python web applications and is commonly used with frameworks like Flask and Django. Gunicorn takes care of handling incoming HTTP requests, serving your application code, and managing multiple worker processes to achieve concurrency and handle multiple requests simultaneously.
+
+**uWSGI**: uWSGI is another WSGI server that serves Python web applications. It provides features like load balancing, process management, and application deployment. uWSGI is highly configurable and can work with various web servers, application servers, and languages, not limited to Python.
+
+**Socket.IO**: Socket.IO is a library that enables real-time, bidirectional communication between web clients and servers. It uses WebSockets under the hood, but it also provides fallback mechanisms for older browsers. Socket.IO is often used to build applications that require real-time updates, such as chat applications, online gaming, and live notifications.
+
+The relationship between these components can be summarized as follows:
+
+**WSGI**: WSGI is a specification that defines how Python web applications should be served by web servers. Both Gunicorn and uWSGI are WSGI servers that conform to this specification. They are responsible for running your Python web application and handling HTTP requests.
+
+**Gunicorn/uWSGI**: These are WSGI servers that can serve your Flask application according to the WSGI specification. They manage the process of receiving HTTP requests, invoking your Flask application code to generate responses, and managing multiple worker processes for concurrency.
+
+**Socket.IO**: Socket.IO is a library that allows real-time communication between clients and servers. While Socket.IO can work alongside a traditional WSGI server like Gunicorn or uWSGI, it's generally used for scenarios where real-time communication is required, such as live updates. It's not a replacement for WSGI servers but serves a different purpose.
+
+## Check the local situation
+
+### Nginx configuration
+
+#### Check the previous Flask configuration
+
+let's start by testing if the Django Nginx and Gunicorn configurations can coexist with your existing Flask project. Follow these steps:
+
+```plaintext
+Check the nginx for flask configuration:
+ mauro@mauro-ThinkPad-L460:/etc/nginx/sites-available$ cat server-2-flask
+server {
+   listen 90;
+   server_name localhost;
+
+   location / {
+       proxy_pass http://localhost:9000;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+   }
+}
+```
+
+Let's break down the Nginx configuration directives used in the server block:
+
+`**proxy_pass http://localhost:5000;**`: This directive is used to specify the backend server that Nginx should proxy requests to. In this case, Nginx is configured to proxy requests to a backend server running on `**http://localhost:5000**`. The value `**http://localhost:5000**` refers to the address of the Gunicorn server that is serving your Flask application.
+
+`**proxy_set_header Host $host;**`: This directive is used to set the `**Host**` header of the proxied request. The `**$host**` variable is a predefined Nginx variable that contains the hostname as received from the client's request. Setting this header ensures that the backend server receives the original hostname requested by the client.
+
+`**proxy_set_header X-Real-IP $remote_addr;**`: This directive is used to set the `**X-Real-IP**` header of the proxied request. The `**$remote_addr**` variable is a predefined Nginx variable that contains the IP address of the client making the request. Setting this header is useful to pass the client's real IP address to the backend server in case of proxying.
+
+Overall, these directives in the Nginx configuration are essential for correctly proxying requests from Nginx to your Gunicorn server. They ensure that the necessary headers are set so that your Flask application running on Gunicorn can correctly interpret the client's request and respond appropriately.
+
+By using these directives, you're creating a reverse proxy setup where Nginx acts as an intermediary between the client and the Gunicorn server, handling tasks like load balancing, SSL termination, and serving static files efficiently while forwarding dynamic requests to the Gunicorn server.
+
+You shoud have alreay the nginx flask site enabled. So please to check run this commands:
+
+```plaintext
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-available$ cd ..
+mauro@mauro-ThinkPad-L460:/etc/nginx$ ls -la
+totale 140
+drwxr-xr-x   8 root root  4096 lug 14 09:28 .
+drwxr-xr-x 140 root root 12288 ago 27 07:21 ..
+drwxr-xr-x   2 root root  4096 nov 10  2022 conf.d
+-rw-r--r--   1 root root  1077 feb  4  2019 fastcgi.conf
+-rw-r--r--   1 root root  1007 feb  4  2019 fastcgi_params
+-rw-r--r--   1 root root  2837 feb  4  2019 koi-utf
+-rw-r--r--   1 root root  2223 feb  4  2019 koi-win
+-rw-r--r--   1 root root  3957 feb  4  2019 mime.types
+drwxr-xr-x   2 root root  4096 nov 10  2022 modules-available
+drwxr-xr-x   2 root root  4096 lug  4 16:14 modules-enabled
+-rw-r--r--   1 root root  1490 lug  4 19:36 nginx_bk.conf
+-rw-r--r--   1 root root  2054 lug 15 17:08 nginx.conf
+-rw-r--r--   1 root root  1489 lug  4 19:42 nginx.conf.save
+-rw-r--r--   1 root root  1589 lug  7 08:01 nginx.conf.save.1
+-rw-r--r--   1 root root  1580 lug  7 10:19 nginx.conf.save.2
+-rw-r--r--   1 root root  1722 lug 10 10:58 nginx.conf.save.3
+-rw-r--r--   1 root root  1587 lug 10 17:15 nginx.conf.save.4
+-rw-r--r--   1 root root  1046 lug 10 17:15 nginx.conf.save.5
+-rw-r--r--   1 root root  1586 lug 10 17:15 nginx.conf.save.6
+-rw-r--r--   1 root root  1349 lug 10 17:15 nginx.conf.save.7
+-rw-r--r--   1 root root 12288 lug  5 19:51 .nginx.conf.swn
+-rw-r--r--   1 root root 12288 lug  7 08:01 .nginx.conf.swo
+-rw-r--r--   1 root root     0 lug 14 09:28 nginx-prova.conf
+-rw-r--r--   1 root root   180 feb  4  2019 proxy_params
+-rw-r--r--   1 root root   636 feb  4  2019 scgi_params
+drwxr-xr-x   2 root root  4096 lug  6 07:47 sites-available
+drwxr-xr-x   2 root root  4096 lug  6 07:43 sites-enabled
+drwxr-xr-x   2 root root  4096 lug  4 16:14 snippets
+-rw-r--r--   1 root root   664 feb  4  2019 uwsgi_params
+-rw-r--r--   1 root root  3071 feb  4  2019 win-utf
+mauro@mauro-ThinkPad-L460:/etc/nginx$ cd sites-enabled
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-enabled$ ls -la
+totale 8
+drwxr-xr-x 2 root root 4096 lug  6 07:43 .
+drwxr-xr-x 8 root root 4096 lug 14 09:28 ..
+lrwxrwxrwx 1 root root   41 lug  6 07:43 server-2-flask -> /etc/nginx/sites-available/server-2-flask
+```
+
+If you don't have you can do it: 
+
+```plaintext
+sudo ln -s /etc/nginx/sites-available/flask-app /etc/nginx/sites-enabled
+```
+
+To test the connection you can run this command:
+
+```plaintext
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-enabled$ sudo nginx -t
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+```
+
+#### Adding new Django configuration
+
+So now we want to combine the existing Flask server block with the new Django server block, you can include them within the same Nginx configuration file. Here's how you can do it:
+
+First of all we have to create a django-app config file:
+
+```plaintext
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-available$ cat django-app
+server {
+   listen 80;
+   server_name _;
+
+   root /home/mauro/Scrivania/django_general_template2;
+
+
+   location / {
+       proxy_pass http://localhost:8000;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+   }
+
+   # Additional configuration for Django app (if needed)
+}
+```
+
+Before we want to create a backup copy of this file /etc/nginx/sites-available/default
+
+```cpp
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-enabled$ sudo cp /etc/nginx/sites-available/default /etc/nginx/sites-available/default_backup
+[sudo] password di mauro:
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-enabled$ ls -la
+totale 8
+drwxr-xr-x 2 root root 4096 lug  6 07:43 .
+drwxr-xr-x 8 root root 4096 lug 14 09:28 ..
+lrwxrwxrwx 1 root root   41 lug  6 07:43 server-2-flask -> /etc/nginx/sites-available/server-2-flask
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-enabled$ cd /etc/nginx/sites-available/
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-available$ ls -la
+totale 20
+drwxr-xr-x 2 root root 4096 ago 27 17:24 .
+drwxr-xr-x 8 root root 4096 lug 14 09:28 ..
+-rw-r--r-- 1 root root 2416 mar 26  2020 default
+-rw-r--r-- 1 root root 2416 ago 27 17:24 default_backup
+-rw-r--r-- 1 root root  206 lug  6 07:47 server-2-flask
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-available$
+```
+
+After we can change the default file (/etc/nginx/sites-available/default)
+
+```plaintext
+# Django Server block
+server {
+   listen 80;
+   server_name _;
+   root /home/mauro/Scrivania/django_general_template2;
+
+ 
+
+   location / {
+       proxy_pass http://localhost:8000;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+   }
+
+   # Additional configuration for Django app (if needed)
+}
+
+# Flask Server
+
+server {
+   listen 90;
+   server_name _;
+   root /home/mauro/Scrivania/flask_server_2;
+
+   location / {
+       proxy_pass http://localhost:9000;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+   }
+
+   # Additional configuration for Flask app (if needed)
+}
+```
+
+##### Code Breakdown
+
+The `**listen [::]:80 default_server;**` directive in an Nginx server block configuration specifies that the server should listen on port 80 for both IPv4 and IPv6 connections, and it designates this block as the default server for requests that don't match any other server blocks.
+
+Here's a breakdown of what each part means:
+
+`**listen**`: This is an Nginx directive that specifies which port and IP addresses the server should listen on.
+
+`**[::]**`: This part specifies the IPv6 address notation. IPv6 is a newer version of the Internet Protocol that uses longer addresses compared to IPv4.
+
+`**:80**`: This part specifies the port number. Port 80 is the default port for HTTP traffic.
+
+`**default_server**`: This is an Nginx configuration directive that designates the server block as the default server. This means that if an incoming request doesn't match any other server blocks based on the `**server_name**` directive, Nginx will use the configuration in this block to handle the request.
+
+Putting it all together, `**listen [::]:80 default_server;**` tells Nginx to listen on both IPv4 and IPv6 addresses on port 80 and use this server block as the default server when no other server block matches the incoming request's `**Host**` header (specified in the HTTP request).
+
+#### Additional Django default /etc/nginx/sites-available/default configuration:
+
+Here some additional configuration to take into account for the future of our project:
+
+add additional configurations to the Nginx server block for your Django project based on your project's requirements. Here are some common scenarios where you might need additional configurations:
+
+-   Serving Media Files: If your Django project handles user-uploaded files (e.g., images, videos), you'll need to configure Nginx to serve these media files. You can use the `**location**` directive with the `**alias**` directive to map URLs to the actual file system path.
+
+```plaintext
+location /media/ {
+    alias /path/to/your/django/media/files/;
+}
+```
+
+-   Handling HTTPS (SSL/TLS): If you want to secure your Django project using HTTPS, you'll need to obtain an SSL/TLS certificate and configure Nginx to use it. You can use the `**listen 443**` directive for HTTPS and include the SSL certificate and private key paths.
+-   Now in this configuration having both Flask and Django server blocks listen on the same port 80 would cause conflicts. Each application should listen on a different port to avoid conflicts.
+
+```plaintext
+# Django Server block
+server {
+   listen 80;
+   server_name _;
+   root /home/mauro/Scrivania/django_general_template2;
+
+ 
+
+   location / {
+       proxy_pass http://localhost:8000;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+   }
+
+   # Additional configuration for Django app (if needed)
+}
+
+# Flask Server
+
+server {
+   listen 90;
+   server_name _;
+   root /home/mauro/Scrivania/flask_server_2;
+
+   location / {
+       proxy_pass http://localhost:9000;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+   }
+```
+
+To clarify:  **Port 80:**
+
+Port 80 is the default port for HTTP web traffic. When you enter a website URL in your browser without specifying a port, your browser assumes port 80 by default.
+
+Web servers like Nginx and Apache typically listen on port 80 to serve web content over standard HTTP connections.
+
+In the context of your Nginx configuration, when you set `**listen 80;**`, it means that Nginx is listening for incoming HTTP requests on port 80.
+
+**Port 8000:**
+
+Port 8000 is not a standard port for HTTP traffic. It is often used for development purposes and is a common choice for running web applications during the development phase.
+
+Many web frameworks, including Django, Flask, and others, allow you to run a development server on port 8000 to test your application locally.
+
+In the context of running Gunicorn (a production-ready application server) with your Flask application, using `**gunicorn -w 4 your_app:app**` starts Gunicorn on port 8000 by default.
+
+-   Handling Custom Error Pages: You can configure custom error pages for your Django project. For example, you can create custom HTML pages for 404 (Not Found) and 500 (Internal Server Error) errors.
+
+```plaintext
+error_page 404 /custom_404.html;
+error_page 500 /custom_500.html;
+
+location / {
+    proxy_pass http://localhost:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+-   Handling URL Prefixes or Subdirectories: If your Django project is served under a specific URL prefix (e.g., `**/myapp/**`), you can configure Nginx to proxy requests to that prefix.
+
+```plaintext
+location /myapp/ {
+    proxy_pass http://localhost:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+Keep in mind that if you're using standard HTTP ports (80 and 90), users won't need to specify the port in the URL when accessing the projects. For example:
+
+-   Flask Project: [_http://your-flask-project.com:90_](http://your-flask-project.com/)
+-   Django Project: [_http://your-django-project.com_](http://your-django-project.com:90/)
+
+_So now create the symbolic links:_
+
+```c
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-available$ sudo ln -s /etc/nginx/sites-available/server-2-flask /etc/nginx/sites-enabled
+ln: creazione del collegamento simbolico '/etc/nginx/sites-enabled/server-2-flask' non riuscita: File già esistente
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-available$ sudo ln -s /etc/nginx/sites-available/django-app /etc/nginx/sites-enabled
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-available$
+```
+
+So now test the nginx:
+
+```plaintext
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-available$ sudo nginx -t
+[sudo] password di mauro: 
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+```
+
+and reload nginx
+
+```plaintext
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-available$ sudo systemctl reload nginx
+mauro@mauro-ThinkPad-L460:/etc/nginx/sites-available$ 
+```
+
+Now, you have separate server blocks for both Flask and Django apps, each listening on different ports (90 for Flask and 80 for Django). Remember to replace the placeholders in the configurations with your actual domain or IP address, and paths to your app directories.
+
+Let's clarify the usage of these files:
+
+**/etc/nginx/sites-available/default:** This file is the default Nginx server block configuration. It's used as a catch-all for requests that don't match any other server blocks. This is useful when you have multiple domains pointing to your server and you want to handle requests for domains that aren't explicitly configured in separate server blocks.
+
+**Separate Configuration Files:** In addition to the default server block, it's common practice to create separate configuration files for each web application you're hosting on your server. Each of these separate files represents a specific application's configuration, and they are usually stored in the `**/etc/nginx/sites-available/**` directory.
+
+When you want to enable a specific configuration, you create a symbolic link from the `**/etc/nginx/sites-enabled/**` directory to the corresponding configuration file in the `**/etc/nginx/sites-available/**` directory.
+
+For example, if you have a Flask app, you can create a configuration file named `**flask-app**` in `**/etc/nginx/sites-available/**`. Then, you create a symbolic link to enable it:
+
+```plaintext
+sudo ln -s /etc/nginx/sites-available/flask-app /etc/nginx/sites-enabled/
+```
+
+This approach keeps your configurations organized and makes it easier to manage different applications' settings. It also provides better isolation between applications.
+
+So, in your case, you should create separate configuration files for your Flask and Django apps, and then create symbolic links in the `**/etc/nginx/sites-enabled/**` directory to enable those configurations. The `**default**` configuration should remain as a catch-all for requests that don't match any specific configuration.
+
+## Gunicorn in Flask project
+
+So now that we have the nginx setting we have to deal with the Gunicorn setting. In this wiki we investigate the coexistence of both flask and django project. But it is supposed we have already in place flask configuration. But let's see. First of all rune the command:
+
+```python
+venv) mauro@mauro-ThinkPad-L460:~/Scrivania/flask_server_2$ gunicorn app:app -b 0.0.0.0:9000 -w 4
+[2023-08-28 14:55:08 +0200] [22008] [INFO] Starting gunicorn 20.1.0
+[2023-08-28 14:55:08 +0200] [22008] [INFO] Listening at: http://0.0.0.0:9000 (22008)
+[2023-08-28 14:55:08 +0200] [22008] [INFO] Using worker: sync
+[2023-08-28 14:55:08 +0200] [22010] [INFO] Booting worker with pid: 22010
+[2023-08-28 14:55:08 +0200] [22011] [INFO] Booting worker with pid: 22011
+[2023-08-28 14:55:08 +0200] [22012] [INFO] Booting worker with pid: 22012
+[2023-08-28 14:55:08 +0200] [22013] [INFO] Booting worker with pid: 22013
+```
+
+If all is correct you can see an output like that above. So now let's deep dive to what have we done with this command:
+
+```plaintext
+gunicorn app:app -b 0.0.0.0:9000 -w 4
+```
+
+The `**-b**` flag specifies the address and port to bind to, and the `**-w**` flag specifies the number of worker processes.
+
+Gunicorn will start and bind to the specified address and port. The log output indicates that Gunicorn is listening at `**http://0.0.0.0:9000**` and has started multiple worker processes (as specified by the `**-w 4**` flag).
+
+This means that your Flask application is now being served by Gunicorn and can handle incoming requests. You can access your Flask application by navigating to `**http://<your-server-ip>:9000**` in your web browser.
+
+The Gunicorn server is now running in the foreground, so the terminal where you executed the Gunicorn command is occupied. If you want to run it in the background and free up the terminal, you can use tools like `**nohup**` or `**tmux**`.
+
+### Gunicorn Insight
+
+The `**-w**` flag in Gunicorn's command stands for the number of worker processes to spawn. Worker processes are separate instances of your Flask application that can handle incoming requests concurrently. The value you specify after the `**-w**` flag determines how many worker processes Gunicorn should create.
+
+For example, when you use the command `**gunicorn app:app -b 0.0.0.0:9000 -w 4**`, you're telling Gunicorn to start your Flask application (`**app:app**`) and bind it to the address `**0.0.0.0**` on port `**9000**`. The `**-w 4**` flag indicates that Gunicorn should create 4 worker processes to handle incoming requests.
+
+Choosing the right number of workers depends on various factors, including the resources available on your server and the expected traffic to your application. Too few workers might lead to performance bottlenecks, while too many workers might consume excessive resources. You may need to experiment with different values to find the optimal number for your specific use case.
+
+In the context of running a web server like Gunicorn, worker processes are individual instances of your application that are created to handle incoming HTTP requests concurrently. Each worker process operates independently and can handle one request at a time. By having multiple worker processes, your application can handle multiple requests simultaneously, which improves the overall responsiveness and performance of your web server. Let's say you have a Flask application that handles incoming HTTP requests. When you run this application using Gunicorn with the `**-w 4**` option, it means you're instructing Gunicorn to create four worker processes to handle incoming requests concurrently.
+
+Here's an example scenario to help illustrate the concept:
+
+1.  You start your Flask application using Gunicorn with the command: `**gunicorn app:app -b 0.0.0.0:9000 -w 4**`
+2.  A user opens their web browser and sends a request to your server (e.g., to `**http://your-server-ip:9000**`).
+3.  Gunicorn's main process receives the incoming request and distributes it to one of the four worker processes.
+4.  The first worker process picks up the request and starts processing it. Let's say the request is to fetch a list of products from your online store.
+5.  While the first worker is processing the first request, another user sends a request to your server.
+6.  The second worker process receives the second request and starts processing it. This request might be to submit a new order to your online store.
+7.  Meanwhile, the first worker process completes processing the first request and sends the response back to the user.
+8.  As the first worker process becomes available, it's ready to pick up the next incoming request.
+9.  If more requests come in while the workers are busy, Gunicorn will distribute them to the available worker processes, ensuring that each request is processed concurrently.
+
+In this example, you have four worker processes working independently to handle incoming requests concurrently. This improves the efficiency and responsiveness of your web application, as it can handle multiple users' interactions simultaneously without waiting for each request to finish before starting the next one.
+
+The phrase "bind the address 0.0.0.0 on port 9000" means that Gunicorn is instructed to listen on all available network interfaces (IP addresses) on the server (`**0.0.0.0**`) and to listen on port `**9000**`. This setting allows Gunicorn to accept incoming requests from any IP address that can reach the server on port 9000. It effectively opens up the web server to accept connections from any source IP address.
+
+In other words, when you bind to `**0.0.0.0:9000**`, your Flask application served by Gunicorn will be accessible on port 9000 from any IP address that can reach your server. This is a common practice when you want your application to be publicly accessible on a specific port. However, it's important to consider security implications and restrict access using firewalls or other security measures as needed.
+
+Let's say you have a Flask application that handles incoming HTTP requests. When you run this application using Gunicorn with the `**-w 4**` option, it means you're instructing Gunicorn to create four worker processes to handle incoming requests concurrently.
+
+Here's an example scenario to help illustrate the concept:
+
+1.  You start your Flask application using Gunicorn with the command: `**gunicorn app:app -b 0.0.0.0:9000 -w 4**`
+2.  A user opens their web browser and sends a request to your server (e.g., to `**http://your-server-ip:9000**`).
+3.  Gunicorn's main process receives the incoming request and distributes it to one of the four worker processes.
+4.  The first worker process picks up the request and starts processing it. Let's say the request is to fetch a list of products from your online store.
+5.  While the first worker is processing the first request, another user sends a request to your server.
+6.  The second worker process receives the second request and starts processing it. This request might be to submit a new order to your online store.
+7.  Meanwhile, the first worker process completes processing the first request and sends the response back to the user.
+8.  As the first worker process becomes available, it's ready to pick up the next incoming request.
+9.  If more requests come in while the workers are busy, Gunicorn will distribute them to the available worker processes, ensuring that each request is processed concurrently.
+
+In this example, you have four worker processes working independently to handle incoming requests concurrently. This improves the efficiency and responsiveness of your web application, as it can handle multiple users' interactions simultaneously without waiting for each request to finish before starting the next one.
+
+#### Further improvement
+
+In development mode, an imporvement on Django prjoject woud be to dinamically assign the ports. This can be allow from **Socket Usage for Port Configuration**:  Using the `**socket**` approach in your `**runserver_helper.py**` is primarily helpful during development when you might want to quickly change ports or manage ports dynamically. It gives you more flexibility in port assignment compared to hardcoding the port number. In production, however, you'll typically use a fixed port number and might not need this dynamic port assignment mechanism.
+
+If you want an insight of socket in python you can check this link: [https://realpython.com/python-sockets/](https://realpython.com/python-sockets/) In my gituhb repository is present the file runserver\_helper.py to trigger this mechanism but is not working correctly. So for now in development mode you are following to run this command:
+
+```plaintext
+python3 manage.py runserver <port>
+```
+
+**uWSGI in Production**: For production environments, using a production-grade WSGI server like uWSGI or Gunicorn is recommended for better performance, reliability, and scalability.
+
+So now let's start to our uWSGI implementation in Django project. Both uWSGI and Gunicorn are popular and widely used WSGI servers, and both can work well for deploying Flask applications. The choice between uWSGI and Gunicorn often depends on your specific needs, preferences, and the deployment environment. Here's how you can implement uWSGI 
+
+```plaintext
+pip3 install uwsgi
+```
+
+I create for direct use the `**uwsgi.ini**`in the project directory:
+
+```plaintext
+[uwsgi]
+http-timeout = 86400     # Maximum time (in seconds) to wait for HTTP requests
+chdir = /home/mauro/Scrivania/django_general_template2
+                         # Change working directory to the specified path
+
+module = general_template1.wsgi:application
+                         # Specifies the Python WSGI module that serves your Django application
+                         # Format: <module_path>:<application_object>
+
+master = true            # Enable master process mode
+processes = 4            # Number of worker processes to spawn
+
+socket = /tmp/myproject.sock
+                         # UNIX socket file to communicate with the web server
+                         # This can be used instead of a network socket for communication
+
+chmod-socket = 666       # Permissions for the socket file
+                         # In this case, allowing read and write access to everyone
+
+vacuum = true            # Automatically clean up and remove the UNIX socket file on exit
+```
+
+After you can launch the test and you can receive an output like that:
+
+```plaintext
+uwsgi --ini uwsgi.ini
+[uWSGI] getting INI configuration from uwsgi.ini
+*** Starting uWSGI 2.0.18-debian (64bit) on [Mon Aug 28 16:30:12 2023] ***
+compiled with version: 10.0.1 20200405 (experimental) [master revision 0be9efad938:fcb98e4978a:705510a708d3642c9c962beb663c476167e4e8a4] on 11 April 2020 11:15:55
+os: Linux-5.15.0-79-generic #86~20.04.2-Ubuntu SMP Mon Jul 17 23:27:17 UTC 2023
+nodename: mauro-ThinkPad-L460
+machine: x86_64
+clock source: unix
+pcre jit disabled
+detected number of CPU cores: 4
+current working directory: /home/mauro/Scrivania/django_general_template2
+detected binary path: /usr/bin/uwsgi-core
+chdir() to /home/mauro/Scrivania/django_general_template2
+your processes number limit is 29057
+your memory page size is 4096 bytes
+detected max file descriptor number: 8192
+lock engine: pthread robust mutexes
+thunder lock: disabled (you can enable it with --thunder-lock)
+uwsgi socket 0 bound to UNIX address /tmp/myproject.sock fd 3
+your server socket listen backlog is limited to 100 connections
+your mercy for graceful operations on workers is 60 seconds
+mapped 364600 bytes (356 KB) for 4 cores
+*** Operational MODE: preforking ***
+*** no app loaded. going in full dynamic mode ***
+*** uWSGI is running in multiple interpreter mode ***
+!!!!!!!!!!!!!! WARNING !!!!!!!!!!!!!!
+no request plugin is loaded, you will not be able to manage requests.
+you may need to install the package for your language of choice, or simply load it with --plugin.
+!!!!!!!!!!! END OF WARNING !!!!!!!!!!
+spawned uWSGI master process (pid: 30387)
+spawned uWSGI worker 1 (pid: 30388, cores: 1)
+spawned uWSGI worker 2 (pid: 30389, cores: 1)
+spawned uWSGI worker 3 (pid: 30390, cores: 1)
+spawned uWSGI worker 4 (pid: 30391, cores: 1)
+^ZMon Aug 28 16:33:04 2023 - *** PAUSE (press start to resume, if you do not have a joypad send SIGTSTP) ***
+Mon Aug 28 16:33:04 2023 - *** worker 1 suspended ***
+Mon Aug 28 16:33:04 2023 - *** worker 3 suspended ***
+Mon Aug 28 16:33:04 2023 - *** worker 2 suspended ***
+Mon Aug 28 16:33:04 2023 - *** worker 4 suspended ***
+^CSIGINT/SIGQUIT received...killing workers...
+worker 1 buried after 1 seconds
+worker 2 buried after 1 seconds
+worker 3 buried after 1 seconds
+worker 4 buried after 1 seconds
+goodbye to uWSGI.
+VACUUM: unix socket /tmp/myproject.sock removed.
+```
+
+In this case it looks like uWSGI has started successfully with the configuration provided in the `**uwsgi.ini**` file. Here's a breakdown of the important information from the log:
+
+`**Starting uWSGI 2.0.18-debian**`: This indicates that uWSGI version 2.0.18 is being started.
+
+`**compiled with version**`: Information about the compiler and build details of uWSGI.
+
+`**os**`: Operating system details.
+
+`**nodename**`: Name of the machine.
+
+`**machine**`: Machine architecture (64-bit).
+
+`**clock source**`: Source of the clock used for timing.
+
+`**pcre jit disabled**`: Just-In-Time compilation for Perl-Compatible Regular Expressions is disabled.
+
+`**detected number of CPU cores**`: Number of CPU cores detected on the system.
+
+`**current working directory**`: The working directory uWSGI is running in.
+
+`**detected binary path**`: Path to the uWSGI binary.
+
+`**chdir() to**`: Directory changed to the specified directory in the `**uwsgi.ini**` configuration.
+
+`**your processes number limit is**`: Limit on the number of processes that can be spawned.
+
+`**your memory page size**`: Size of the memory page.
+
+`**detected max file descriptor number**`: Maximum number of file descriptors that can be opened.
+
+`**lock engine**`: Locking mechanism being used.
+
+`**uwsgi socket 0 bound to UNIX address**`: The UNIX socket created by uWSGI for communication.
+
+`**your server socket listen backlog**`: Limit on the number of connections that can be in the listen queue.
+
+`**your mercy for graceful operations on workers**`: Grace period for worker processes to finish operations before shutdown.
+
+`**mapped bytes**`: Memory allocated for uWSGI.
+
+`**Operational MODE**`: Mode in which uWSGI is running (preforking in this case).
+
+`**no app loaded. going in full dynamic mode**`: No application is loaded yet.
+
+`**uWSGI is running in multiple interpreter mode**`: uWSGI is running in a mode that allows multiple interpreter instances.
+
+`**WARNING**`: A warning message about no request plugin being loaded, which means that uWSGI won't be able to manage requests fully.
+
+`**spawned uWSGI master process**`: Master process is spawned.
+
+`**spawned uWSGI worker x**`: Worker processes are spawned, each with its own process ID (pid) and assigned CPU core.
+
+Overall, the log shows that uWSGI has started and spawned worker processes according to the configuration in the `**uwsgi.ini**` file. It's worth noting that the warning about no request plugin loaded might affect the functionality of uWSGI, so you may need to address that if you intend to use uWSGI for serving your Django application in production.
+
+### Pushing on new Github branch
+
+So now is almost done from the point of view of local repository. So before to pass to DigitalOcean Droplet let create a specific github branch and push it to our (new) github branch. Here the exact comands:
+
+```plaintext
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ git checkout -b django-with-uwsgi
+Si è passati a un nuovo branch 'django-with-uwsgi'
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ git add .
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ git commit -m "Added uwsgi"
+[django-with-uwsgi 25fbf15] Added uwsgi
+ 4 files changed, 23 insertions(+), 2 deletions(-)
+ rewrite __pycache__/runserver_helper.cpython-38.pyc (73%)
+ create mode 100644 uwsgi.ini
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ git push origin django-with-uwsgi
+Enumerazione degli oggetti in corso: 12, fatto.
+Conteggio degli oggetti in corso: 100% (12/12), fatto.
+Compressione delta in corso, uso fino a 4 thread
+Compressione oggetti in corso: 100% (7/7), fatto.
+Scrittura degli oggetti in corso: 100% (7/7), 1.28 KiB | 1.28 MiB/s, fatto.
+7 oggetti totali (5 delta), 0 riutilizzati (0 delta)
+remote: Resolving deltas: 100% (5/5), completed with 5 local objects.
+remote: 
+remote: Create a pull request for 'django-with-uwsgi' on GitHub by visiting:
+remote:      https://github.com/progettazionemauro/django-template/pull/new/django-with-uwsgi
+remote: 
+To https://github.com/progettazionemauro/django-template
+ * [new branch]      django-with-uwsgi -> django-with-uwsgi
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ 
+```
+
+### Cloning the repo in DigitalOcean Droplet
+
+Go in DigitalOcean Droplet. 
+
+The goal is to create side by side the Django Project to Flask Project. Infact mixing two separate projects in a single repository is generally not recommended, especially if they are different web applications using different frameworks like Django and Flask. It's better to keep them in separate repositories for better organization and maintainability.
+
+In your DigitalOcean droplet, you can set up separate directories for each project and deploy them individually. You've already mentioned that you have your Flask project running successfully on the droplet. You can follow a similar process to deploy your Django project:
+
+```plaintext
+mkdir /home/mauro/django-app
+```
+
+Create a directory for your Django project:
+
+First **Clone the Repository from Github (**rember that you have the last changes in a specific branch so follow this steps). Open your terminal and navigate to the directory where you want to clone the repository. Then, use the following command to clone the specific branch:
+
+```plaintext
+git clone -b django-with-uwsgi https://github.com/progettazionemauro/django-template.git
+```
+
+**Navigate to the Cloned Directory:**
+
+After cloning, navigate into directory and follow the commands. Here I give you a series of commands because is too large the explication step by step, but I am sure you can follow:
+
+#### Before in Visual Studio Code (local)
+
+```plaintext
+venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ pip3 freeze > requirements.txt
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ pip3 list | grep Django
+Django             4.2.2  
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ cat requirements.txt
+asgiref==3.7.2
+backports.zoneinfo==0.2.1
+Django==4.2.2
+gunicorn==21.2.0
+packaging==23.1
+sqlparse==0.4.4
+typing-extensions==4.6.3
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ git add .
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ git commit -m "aggiunto requirements.txt"
+[django-with-uwsgi 5720a3b] aggiunto requirements.txt
+ 1 file changed, 7 insertions(+)
+ create mode 100644 requirements.txt
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ git push origin django-with-uwsgi
+Enumerazione degli oggetti in corso: 4, fatto.
+Conteggio degli oggetti in corso: 100% (4/4), fatto.
+Compressione delta in corso, uso fino a 4 thread
+Compressione oggetti in corso: 100% (3/3), fatto.
+Scrittura degli oggetti in corso: 100% (3/3), 402 byte | 402.00 KiB/s, fatto.
+3 oggetti totali (1 delta), 0 riutilizzati (0 delta)
+remote: Resolving deltas: 100% (1/1), completed with 1 local object.
+To https://github.com/progettazionemauro/django-template
+   25fbf15..5720a3b  django-with-uwsgi -> django-with-uwsgi
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ git add .
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ git commit -m "versione di requiremnts.txt senza backports.zoneinfo"
+[django-with-uwsgi 1358b1f] versione di requiremnts.txt senza backports.zoneinfo
+ 1 file changed, 1 deletion(-)
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ git push origin django-with-uwsgi
+Enumerazione degli oggetti in corso: 5, fatto.
+Conteggio degli oggetti in corso: 100% (5/5), fatto.
+Compressione delta in corso, uso fino a 4 thread
+Compressione oggetti in corso: 100% (3/3), fatto.
+Scrittura degli oggetti in corso: 100% (3/3), 378 byte | 378.00 KiB/s, fatto.
+3 oggetti totali (1 delta), 0 riutilizzati (0 delta)
+remote: Resolving deltas: 100% (1/1), completed with 1 local object.
+To https://github.com/progettazionemauro/django-template
+   5720a3b..1358b1f  django-with-uwsgi -> django-with-uwsgi
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/django_general_template2$ 
+```
+
+#### After in DigitalOcean Droplet
+
+```plaintext
+cd /home/mauro/django-app
+python3 -m venv venv
+source venv/bin/activate
+```
+
+**Pull Changes from GitHub:** 
+
+**the first time you have to clone the repo:**
+
+```plaintext
+git clone -b django-with-uwsgi https://github.com/progettazionemauro/django-template.git
+```
+
+After:
+
+```plaintext
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+Maybe you can find errors errors message indicates that there's an issue with building the `**backports.zoneinfo**` package. The build process fails with an error related to the `**zoneinfo_fromutc**` function in the `**lib/zoneinfo_module.c**` file.
+
+This issue might be caused by a compatibility problem between the version of the `**backports.zoneinfo**` package and the version of Python you're using. So many times the best option is to delete in the original (VSC) the package from requirements.txt after tring the functionality. In this case you have to repush and recommit to GH the branch and after pull the fresh committed branch into the droplet. So next git will be git pull like this:
+
+```plaintext
+git pull origin django-with-uwsgi
+```
+
+When you want to check the documentation you can take this command into account in droplet to check the python version:
+
+```plaintext
+ls /usr/bin | grep python
+ls /usr/bin | grep python
+pybabel-python3
+python3
+python3-config
+python3.10
+python3.10-config
+x86_64-linux-gnu-python3-config
+x86_64-linux-gnu-python3.10-config
+```
+
+#### Removing venv to use another python version
+
+If there is a problem with the python version best option is to remove the previous environment and reinstall the specific one. To do so we can act as fgollows:
+
+```plaintext
+rm -r venv
+python3 -m venv venv  # example if i want a specific python version
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+Finally
+
+```plaintext
+python manage.py runserver
+```
+
+## Starting double configuration in DigitalOcean Droplet
+
+So before to start the double configuration with the aim to link out Flask and Django projects on only one Droplet IP, we have to configure Django settings. In DO Droplet:
+
+```plaintext
+cd /home/mauro/django-project
+sudo apt update
+sudo apt install uwsgi uwsgi-plugin-python3 nginx
+
+```
+
+The structure of the project that i strongly suggest to follow is this:
+
+```plaintext
+Directory: /home/mauro/Scrivania/django_general_template2/
+
+└── 
+    ├── output.txt
+    ├── db.sqlite3
+    ├── manage.py
+    ├── readme.md
+    ├── uwsgi.ini
+    ├── requirements.txt
+    ├── runserver_helper.py
+    ├── django_testo.txt
+    └── sgq
+        ├── __init__.py
+        ├── urls.py
+        ├── admin.py
+        ├── tests.py
+        ├── models.py
+        ├── views.py
+        ├── apps.py
+        ├── forms.py
+        └── utilities
+            ├── hotkey_hello_world.py
+            ├── cppy_and_paste_in_text_document.py
+            ├── django_general_template2.code-workspace
+            ├── directory_tree_gui.py
+            ├── chat_gpt_scrape_non_funzionante.py
+            └── storage
+                ├── selected_text.txt
+        └── storage
+            ├── selected_text.txt
+        └── migrations
+            ├── __init__.py
+            ├── 0001_initial.py
+        └── templates
+            ├── schema_certificativo_list.html
+            ├── auditor_list.html
+            ├── base.html
+            ├── html.txt
+            ├── delete_schema_certificativo.html
+            ├── schema_certificativo_detail.html
+            ├── home.html
+            ├── create_schema_certificativo.html
+            ├── update_schema_certificativo.html
+    └── utilities
+        ├── hotkey_hello_world.py
+        ├── cppy_and_paste_in_text_document.py
+        ├── django_general_template2.code-workspace
+        ├── directory_tree_gui.py
+        ├── chat_gpt_scrape_non_funzionante.py
+        └── storage
+            ├── selected_text.txt
+    └── storage
+        ├── selected_text.txt
+    └── migrations
+        ├── __init__.py
+        ├── 0001_initial.py
+    └── templates
+        ├── schema_certificativo_list.html
+        ├── auditor_list.html
+        ├── base.html
+        ├── html.txt
+        ├── delete_schema_certificativo.html
+        ├── schema_certificativo_detail.html
+        ├── home.html
+        ├── create_schema_certificativo.html
+        ├── update_schema_certificativo.html
+    └── python_utils
+        ├── directory_tree.py
+    └── general_template1
+        ├── __init__.py
+        ├── readme.md
+        ├── urls.py
+        ├── wsgi.py
+        ├── asgi.py
+        ├── settings.py
+└── sgq
+    ├── __init__.py
+    ├── urls.py
+    ├── admin.py
+    ├── tests.py
+    ├── models.py
+    ├── views.py
+    ├── apps.py
+    ├── forms.py
+    └── utilities
+        ├── hotkey_hello_world.py
+        ├── cppy_and_paste_in_text_document.py
+        ├── django_general_template2.code-workspace
+        ├── directory_tree_gui.py
+        ├── chat_gpt_scrape_non_funzionante.py
+        └── storage
+            ├── selected_text.txt
+    └── storage
+        ├── selected_text.txt
+    └── migrations
+        ├── __init__.py
+        ├── 0001_initial.py
+    └── templates
+        ├── schema_certificativo_list.html
+        ├── auditor_list.html
+        ├── base.html
+        ├── html.txt
+        ├── delete_schema_certificativo.html
+        ├── schema_certificativo_detail.html
+        ├── home.html
+        ├── create_schema_certificativo.html
+        ├── update_schema_certificativo.html
+└── utilities
+    ├── hotkey_hello_world.py
+    ├── cppy_and_paste_in_text_document.py
+    ├── django_general_template2.code-workspace
+    ├── directory_tree_gui.py
+    ├── chat_gpt_scrape_non_funzionante.py
+    └── storage
+        ├── selected_text.txt
+└── storage
+    ├── selected_text.txt
+└── migrations
+    ├── __init__.py
+    ├── 0001_initial.py
+└── templates
+    ├── schema_certificativo_list.html
+    ├── auditor_list.html
+    ├── base.html
+    ├── html.txt
+    ├── delete_schema_certificativo.html
+    ├── schema_certificativo_detail.html
+    ├── home.html
+    ├── create_schema_certificativo.html
+    ├── update_schema_certificativo.html
+└── python_utils
+    ├── directory_tree.py
+└── general_template1
+    ├── __init__.py
+    ├── readme.md
+    ├── urls.py
+    ├── wsgi.py
+    ├── asgi.py
+    ├── settings.py
+```
+
+This is the breakdown:
+
+here's a brief explanation of some key components:
+
+`**general_template1**`: This is the main Django project directory. It contains the project settings (`**settings.py**`), URL configuration (`**urls.py**`), and other project-related files.
+
+`**sgq**`: This appears to be one of the Django apps within your project. It contains models, views, forms, templates, and migrations specific to this app. Apps are modular components that help organize your project.
+
+`**utilities**`: This directory seems to contain utility scripts or modules that might be useful throughout your project. It's a good practice to keep such reusable code separate.
+
+`**migrations**`: This directory contains database migration files generated by Django. Migrations are used to manage changes to your database schema over time.
+
+`**templates**`: This directory holds HTML templates used by your Django views. These templates can be rendered with dynamic data from your views.
+
+`**python_utils**`: This directory seems to contain Python utility scripts or modules. Similar to the `**utilities**` directory, it's used for storing reusable code.
+
+`**uwsgi.ini**`: This file is the configuration file for uWSGI, which is a web server interface for running Python web applications. It defines various settings for uWSGI, including the module that serves your Django application.
+
+`**requirements.txt**`: This file lists the dependencies required for your Django project. It's used by `**pip**` to install the necessary packages.
+
+`**manage.py**`: This script is used for various administrative tasks, including running the development server, creating database tables, and running database migrations.
+
+### DO Droplet - Nginx configuration
+
+To investigate and review the existing Nginx configuration for your Flask project here the commands:
+
+**View Nginx Configuration Files**:
+
+List the files in the `**sites-available**` directory to see the available server block configurations:
+
+```plaintext
+ls /etc/nginx/sites-available
+```
+
+View the contents of a specific configuration file (replace `**<config_file>**` with the actual file name):
+
+```plaintext
+cat /etc/nginx/sites-available/<config_file>
+```
+
+**Nginx Syntax Test**:
+
+-   Test the Nginx configuration for syntax errors:
+
+```plaintext
+sudo nginx -t
+```
+
+**Nginx Error Logs**:
+
+-   View the Nginx error log to check for any issues:
+
+```plaintext
+cat /var/log/nginx/error.log
+```
+
+**Check Running Processes**:
+
+-   List all the running Nginx processes to ensure that Nginx is active:
+
+```plaintext
+ps aux | grep nginx
+```
+
+Please note:
+
+The `**ps aux**` command is used to display a snapshot of the current processes running in a Unix-like operating system. Here's what each part of the command means:
+
+**ps**: This is the command itself, which stands for "process status." It's used to display information about the currently running processes.
+
+**aux**: These are options or flags that modify the behavior of the `**ps**` command:
+
+**a**: This option displays information about all processes, not just those associated with the current terminal session.
+
+**u**: This option displays additional information about the processes, including the user who started each process and the resource utilization details.
+
+**x**: This option shows processes that are not attached to a terminal. It's used to include processes that are running in the background or as daemons.
+
+When you run the `**ps aux**` command, you'll see a list of processes along with details like the user who started the process, the process ID (PID), the CPU and memory usage, the command that started the process, and more. This command is often used by system administrators and users to get an overview of the system's current process activity.
+
+**Check Nginx Server Blocks**:
+
+At the moment before Django installation and with Flask installation in place, we have this:
+
+```plaintext
+root@ubuntu-s-1vcpu-512mb-10gb-sfo3-01:/etc/nginx/sites-available# cat default
+##
+# You should look at the following URL's in order to grasp a solid understanding
+# of Nginx configuration files in order to fully unleash the power of Nginx.
+# https://www.nginx.com/resources/wiki/start/
+# https://www.nginx.com/resources/wiki/start/topics/tutorials/config_pitfalls/
+# https://wiki.debian.org/Nginx/DirectoryStructure
+#
+# In most cases, administrators will remove this file from sites-enabled/ and
+# leave it as reference inside of sites-available where it will continue to be
+# updated by the nginx packaging team.
+#
+# This file will automatically load configuration files provided by other
+# applications, such as Drupal or Wordpress. These applications will be made
+# available underneath a path with that package name, such as /drupal8.
+#
+# Please see /usr/share/doc/nginx-doc/examples/ for more detailed examples.
+##
+
+# Default server configuration
+#
+server {
+        listen 80 default_server;
+        listen [::]:80 default_server;
+
+        # SSL configuration
+        #
+        # listen 443 ssl default_server;
+        # listen [::]:443 ssl default_server;
+        #
+        # Note: You should disable gzip for SSL traffic.
+        # See: https://bugs.debian.org/773332
+        #
+        # Read up on ssl_ciphers to ensure a secure configuration.
+        # See: https://bugs.debian.org/765782
+        #
+        # Self signed certs generated by the ssl-cert package
+        # Don't use them in a production server!
+        #
+        # include snippets/snakeoil.conf;
+
+        root /var/www/html;
+
+        # Add index.php to the list if you are using PHP
+        index index.html index.htm index.nginx-debian.html;
+
+        server_name _;
+
+        location / {
+                # First attempt to serve request as file, then
+                # as directory, then fall back to displaying a 404.
+                try_files $uri $uri/ =404;
+        }
+
+        # pass PHP scripts to FastCGI server
+        #
+        #location ~ \.php$ {
+        #       include snippets/fastcgi-php.conf;
+        #
+        #       # With php-fpm (or other unix sockets):
+        #       fastcgi_pass unix:/run/php/php7.4-fpm.sock;
+        #       # With php-cgi (or other tcp sockets):
+        #       fastcgi_pass 127.0.0.1:9000;
+        #}
+
+        # deny access to .htaccess files, if Apache's document root
+        # concurs with nginx's one
+        #
+        #location ~ /\.ht {
+        #       deny all;
+        #}
+}
+
+
+# Virtual Host configuration for example.com
+#
+# You can move that to a different file under sites-available/ and symlink that
+# to sites-enabled/ to enable it.
+#
+#server {
+#       listen 80;
+#       listen [::]:80;
+#
+#       server_name example.com;
+#
+#       root /var/www/example.com;
+#       index index.html;
+#
+#       location / {
+#               try_files $uri $uri/ =404;
+#       }
+#}
+```
+
+#### **Modify Default Server Block**:
+
+The default Nginx server block you posted is the default configuration that comes with Nginx. Since you already have a Flask project running, you will need to modify this default configuration and create a new server block for your Django project.
+
+### Creating a uswgi socket for Flask project
+
+Before to modify default server block in droplet we have to recreate the socket in local repository (VSC) and after in DO Droplet. Once done that we can mode to the section DO Droplet - Flask Nginx reconfiguration.
+
+So in local VSC: 
+
+```plaintext
+mauro@mauro-ThinkPad-L460:~/Scrivania/flask_server_2$ source venv/bin/activate
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/flask_server_2$ ls -la
+totale 196
+drwxrwxr-x 12 mauro mauro  4096 ago  8 10:28 .
+drwxr-xr-x 12 mauro mauro  4096 ago 13 11:06 ..
+-rw-rw-r--  1 mauro mauro 11980 ago  4 20:02 app.py
+-rw-rw-r--  1 mauro mauro  3716 ago  4 10:02 app_semplified.py
+-rwxrwxr-x  1 mauro mauro   450 lug 20 10:38 bk_update_nginx_config.sh
+-rw-rw-r--  1 mauro mauro  8192 lug 20 10:38 buttons.db
+-rw-rw-r--  1 mauro mauro  2025 lug 20 10:38 certificate.crt
+-rw-rw-r--  1 mauro mauro   340 ago  3 17:44 commands.py
+-rw-rw-r--  1 mauro mauro 20480 ago  8 10:28 database.db
+-rw-rw-r--  1 mauro mauro    94 ago  2 14:26 database.py
+-rw-rw-r--  1 mauro mauro   128 lug 20 10:38 .env
+-rw-rw-r--  1 mauro mauro   515 ago  3 15:55 forms.py
+-rw-rw-r--  1 mauro mauro    95 giu 29 06:39 function1.py
+-rw-rw-r--  1 mauro mauro    96 giu 28 20:38 function2.py
+drwxrwxr-x  8 mauro mauro  4096 ago  5 08:43 .git
+-rw-rw-r--  1 mauro mauro  8122 lug 20 10:38 insieme.txt
+drwxrwxr-x  2 mauro mauro  4096 ago  4 16:59 instance
+drwxrwxr-x  4 mauro mauro  4096 ago  4 10:18 migrations
+-rw-rw-r--  1 mauro mauro   682 ago  3 16:08 models.py
+drwxrwxr-x  2 mauro mauro  4096 lug 25 08:30 ngrock
+-rw-rw-r--  1 mauro mauro  1651 lug 20 10:38 pa-mycert.csr
+-rw-rw-r--  1 mauro mauro  3272 lug 20 10:38 pa-mykey.key
+drwxrwxr-x  2 mauro mauro  4096 ago 28 11:26 __pycache__
+drwxrwxr-x  3 mauro mauro  4096 lug 26 17:36 python_utils
+-rw-rw-r--  1 mauro mauro 13283 lug 23 16:30 readme.md
+-rw-rw-r--  1 mauro mauro   657 ago 28 12:47 requirements.txt
+-rw-rw-r--  1 mauro mauro   203 lug  1 07:59 schema.sql
+-rw-rw-r--  1 mauro mauro  3268 lug 20 10:38 ssl_certificate_key.key
+drwxrwxr-x  2 mauro mauro  4096 lug 31 08:41 static
+-rw-rw-r--  1 mauro mauro  6798 lug 25 17:39 storage.txt
+drwxrwxr-x  2 mauro mauro  4096 ago  5 07:20 templates
+-rwxrwxr-x  1 mauro mauro   256 lug 20 10:38 update_nginx_config.sh
+drwxrwxr-x  2 mauro mauro  4096 ago  3 16:13 uploads
+-rw-rw-r--  1 mauro mauro  1520 ago  2 14:22 user_authentication.py
+-rw-r--r--  1 mauro mauro     0 ago  4 11:33 user.db
+-rw-rw-r--  1 mauro mauro   397 ago  4 08:27 user_models.py
+-rw-r--r--  1 mauro mauro     0 ago  4 11:08 users.db
+-rw-rw-r--  1 mauro mauro  1299 ago  4 11:14 utils.py
+drwxrwxr-x  6 mauro mauro  4096 giu 28 19:49 venv
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/flask_server_2$ pip3 install uwsgi
+Collecting uwsgi
+  Downloading uwsgi-2.0.22.tar.gz (809 kB)
+     |████████████████████████████████| 809 kB 2.5 MB/s 
+Building wheels for collected packages: uwsgi
+  Building wheel for uwsgi (setup.py) ... error
+  ERROR: Command errored out with exit status 1:
+   command: /home/mauro/Scrivania/flask_server_2/venv/bin/python3 -u -c 'import sys, setuptools, tokenize; sys.argv[0] = '"'"'/tmp/pip-install-9ir4g3oh/uwsgi/setup.py'"'"'; __file__='"'"'/tmp/pip-install-9ir4g3oh/uwsgi/setup.py'"'"';f=getattr(tokenize, '"'"'open'"'"', open)(__file__);code=f.read().replace('"'"'\r\n'"'"', '"'"'\n'"'"');f.close();exec(compile(code, __file__, '"'"'exec'"'"'))' bdist_wheel -d /tmp/pip-wheel-zpb2y0uu
+       cwd: /tmp/pip-install-9ir4g3oh/uwsgi/
+  Complete output (8 lines):
+  /usr/lib/python3.8/distutils/dist.py:274: UserWarning: Unknown distribution option: 'descriptions'
+    warnings.warn(msg)
+  usage: setup.py [global_opts] cmd1 [cmd1_opts] [cmd2 [cmd2_opts] ...]
+     or: setup.py --help [cmd1 cmd2 ...]
+     or: setup.py --help-commands
+     or: setup.py cmd --help
+  
+  error: invalid command 'bdist_wheel'
+  ----------------------------------------
+  ERROR: Failed building wheel for uwsgi
+  Running setup.py clean for uwsgi
+Failed to build uwsgi
+Installing collected packages: uwsgi
+    Running setup.py install for uwsgi ... done
+Successfully installed uwsgi-2.0.22
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/flask_server_2$ pip3 install --upgrade setuptools
+Collecting setuptools
+  Downloading setuptools-68.1.2-py3-none-any.whl (805 kB)
+     |████████████████████████████████| 805 kB 2.4 MB/s 
+Installing collected packages: setuptools
+  Attempting uninstall: setuptools
+    Found existing installation: setuptools 44.0.0
+    Uninstalling setuptools-44.0.0:
+      Successfully uninstalled setuptools-44.0.0
+Successfully installed setuptools-68.1.2
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/flask_server_2$ pip3 install wheel
+Collecting wheel
+  Downloading wheel-0.41.2-py3-none-any.whl (64 kB)
+     |████████████████████████████████| 64 kB 1.4 MB/s 
+Installing collected packages: wheel
+Successfully installed wheel-0.41.2
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/flask_server_2$ pip3 install uwsgi
+Requirement already satisfied: uwsgi in ./venv/lib/python3.8/site-packages (2.0.22)
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/flask_server_2$ 
+```
+
+Now create the socket in local VSC: In your Flask project directory, create a uWSGI configuration file named **uwsgi.ini**. This file will contain the uWSGI configuration for your Flask application **(Please note that this give you an error!!)**
+
+```plaintext
+[uwsgi]
+module = flask_server_2:app # Replace with your Flask app's entry point
+callable = app
+master = true
+processes = 4
+socket = /tmp/your_flask_app.sock # Path to the uWSGI socket
+chmod-socket = 666
+vacuum = true
+vacuum = true
+```
+
+And running this command:
+
+```plaintext
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/flask_server_2$ uwsgi --ini uwsgi.ini
+[uWSGI] getting INI configuration from uwsgi.ini
+*** WARNING: Can't find section "uwsgi" in INI configuration file uwsgi.ini ***
+*** Starting uWSGI 2.0.22 (64bit) on [Tue Aug 29 10:51:10 2023] ***
+compiled with version: 9.4.0 on 29 August 2023 08:35:31
+os: Linux-5.15.0-79-generic #86~20.04.2-Ubuntu SMP Mon Jul 17 23:27:17 UTC 2023
+nodename: mauro-ThinkPad-L460
+machine: x86_64
+clock source: unix
+detected number of CPU cores: 4
+current working directory: /home/mauro/Scrivania/flask_server_2
+detected binary path: /home/mauro/Scrivania/flask_server_2/venv/bin/uwsgi
+!!! no internal routing support, rebuild with pcre support !!!
+*** WARNING: you are running uWSGI without its master process manager ***
+your processes number limit is 29057
+your memory page size is 4096 bytes
+detected max file descriptor number: 8192
+lock engine: pthread robust mutexes
+thunder lock: disabled (you can enable it with --thunder-lock)
+The -s/--socket option is missing and stdin is not a socket.
+```
+
+##### Create effective uwsgi in VSC local
+
+This was a very trickiest part because with the dianmically assignment of the ports it is not easy to create an effective an without error uwsgi.ini. With the help of AI and with some trial and errors procedures the effective file to put in your Flask app.py directory is this:
+
+```plaintext
+[uwsgi]
+http-socket = 0.0.0.0:9000
+module = app:app
+pythonpath = /flask_server_2/
+callable = app
+master = true
+processes = 4
+socket = /tmp/your_flask_app.sock  # Path to the uWSGI socket
+chmod-socket = 666
+vacuum = true
+die-on-term = true
+```
+
+the main problem it was that in the “traditional” uwsgi file there is not http-socket:0.0.0.0:9000
+
+OK now with this code we can launch the command without error:
+
+```plaintext
+(venv) mauro@mauro-ThinkPad-L460:~/Scrivania/flask_server_2$ uwsgi --ini uwsgi.ini
+[uWSGI] getting INI configuration from uwsgi.ini
+*** Starting uWSGI 2.0.22 (64bit) on [Tue Aug 29 12:43:49 2023] ***
+compiled with version: 9.4.0 on 29 August 2023 08:35:31
+os: Linux-5.15.0-79-generic #86~20.04.2-Ubuntu SMP Mon Jul 17 23:27:17 UTC 2023
+nodename: mauro-ThinkPad-L460
+machine: x86_64
+clock source: unix
+detected number of CPU cores: 4
+current working directory: /home/mauro/Scrivania/flask_server_2
+detected binary path: /home/mauro/Scrivania/flask_server_2/venv/bin/uwsgi
+!!! no internal routing support, rebuild with pcre support !!!
+your processes number limit is 29057
+your memory page size is 4096 bytes
+detected max file descriptor number: 65535
+lock engine: pthread robust mutexes
+thunder lock: disabled (you can enable it with --thunder-lock)
+uwsgi socket 0 bound to TCP address 0.0.0.0:9000 fd 3
+uwsgi socket 1 bound to UNIX address /tmp/your_flask_app.sock  # Path to the uWSGI socket fd 4
+Python version: 3.8.10 (default, May 26 2023, 14:05:08)  [GCC 9.4.0]
+*** Python threads support is disabled. You can enable it with --enable-threads ***
+Python main interpreter initialized at 0x563d81747df0
+your server socket listen backlog is limited to 100 connections
+your mercy for graceful operations on workers is 60 seconds
+mapped 364600 bytes (356 KB) for 4 cores
+*** Operational MODE: preforking ***
+added /flask_server_2/ to pythonpath.
+WSGI app 0 (mountpoint='') ready in 1 seconds on interpreter 0x563d81747df0 pid: 75568 (default app)
+*** uWSGI is running in multiple interpreter mode ***
+spawned uWSGI master process (pid: 75568)
+spawned uWSGI worker 1 (pid: 75573, cores: 1)
+spawned uWSGI worker 2 (pid: 75574, cores: 1)
+spawned uWSGI worker 3 (pid: 75575, cores: 1)
+spawned uWSGI worker 4 (pid: 75576, cores: 1)
+```
+
+uWSGI server is up and running now based on the configuration in your `**uwsgi.ini**` file. The output you provided indicates that uWSGI has successfully started your Flask application and is serving it on both the TCP address 0.0.0.0:9000 and the UNIX socket /tmp/your\_flask\_app.sock.
+
+Here are the key points from the output:
+
+-   The server is listening on both a TCP address (0.0.0.0:9000) and a UNIX socket (/tmp/your\_flask\_app.sock).
+-   The Python version being used is 3.8.10.
+-   The server is in preforking operational mode.
+-   Workers have been spawned to handle incoming requests.
+
+This indicates that uWSGI is correctly loading your Flask app using the configuration from the `**uwsgi.ini**` file. Your Flask app should be accessible now through the configured ports and socket
+
+##### Important python utility
+
+When working with the file structure it can be useful to work with an utility that I created to see the exact structure tree. This is the utility:
+
+```python
+import tkinter as tk
+import os
+
+def generate_tree():
+    directory = entry.get().strip()
+    excludes = exclude_entry.get().strip().split(";")  # Use semicolon as the delimiter
+    text.delete(1.0, tk.END)  # Clear the text widget
+
+    text.insert(tk.END, f"Directory: {directory}\n\n")
+    generate_subtree(directory, set(excludes), 0)
+
+def generate_subtree(directory, excludes, level):
+    indent = "    " * level
+    for root, dirs, files in os.walk(directory):
+        # Exclude specified directories
+        dirs[:] = [d for d in dirs if d not in excludes]
+        
+        # Print current directory
+        text.insert(tk.END, f"{indent}└── {os.path.basename(root)}\n")
+
+        # Print files in current directory
+        for file in files:
+            text.insert(tk.END, f"{indent}    ├── {file}\n")
+
+        # Create a copy of the excluded directories set for the recursive call
+        sub_excludes = set(excludes)
+
+        # Recursively generate subtree for subdirectories
+        for subdir in dirs:
+            generate_subtree(os.path.join(root, subdir), sub_excludes, level + 1)
+
+def close_app():
+    root.destroy()
+
+root = tk.Tk()
+root.title("Directory Tree Generator")
+
+label = tk.Label(root, text="Enter a directory path:")
+label.pack()
+
+entry = tk.Entry(root)
+entry.pack()
+
+exclude_label = tk.Label(root, text="Enter directories to exclude (separated by semicolon without spaces!!):")
+exclude_label.pack()
+
+exclude_entry = tk.Entry(root)
+exclude_entry.pack()
+
+generate_button = tk.Button(root, text="Generate Tree", command=generate_tree)
+generate_button.pack()
+
+close_button = tk.Button(root, text="Close", command=close_app)
+close_button.pack()
+
+text = tk.Text(root)
+text.pack()
+
+root.mainloop()
+```
+
+#### Pushing you new branch directly to DO Droplet
+
+So far so good! we did a lot of work to create uwsgi.ini file into local VSC. Now is work. But this is not the finale work! the really actvity is to transfer the file to DigitalOcean Droplet without causing versioning conflicts between the three source of control: local VSC, Github central Repo and DigitalOcean Droplet. This is not easy task and you think you can do it with easy git commands is almost impossible!
+
+This is what is named **Continuous Integration and Continuous Deployment (CI/CD). CI/CD** is a software development practice that involves automating the process of building, testing, and deploying code changes. It helps teams deliver software more efficiently and with fewer errors. Here's some highlights for CI/CD:
+
+**Version Control with GitHub:**
+
+-   Start by creating a GitHub repository for your project if you haven't already. Commit your code changes to this repository regularly.
+-   Make sure your repository has a proper `**.gitignore**` file to exclude unnecessary files from version control.
+
+**Setting up CI/CD Pipeline:**
+
+-   Use a Continuous Integration service like GitHub Actions to automate building and testing your code whenever changes are pushed to your repository.
+
+**Deploying to DigitalOcean:**
+
+-   Set up a Continuous Deployment pipeline to deploy your code to your DigitalOcean droplet whenever changes are pushed to a specific branch (e.g., `**main**` or `**production**`).
+-   You can use deployment tools like Fabric, Ansible, or custom deployment scripts to automate the deployment process.
+
+**Secrets and Environment Variables:**
+
+-   Store sensitive information (like API keys, tokens, etc.) as secrets in GitHub Actions or as environment variables in your DigitalOcean droplet. Do not hardcode them in your code.
+-   Configure secrets and environment variables in a secure manner to ensure proper access control.
+
+**CI/CD Configuration in GitHub Actions:**
+
+-   Create a `**.github/workflows**` directory in your GitHub repository and add a YAML file (e.g., `**ci-cd.yml**`) for defining your CI/CD pipeline.
+-   Define workflow steps like building the code, running tests, and deploying to DigitalOcean. Use available GitHub Actions actions and runners for these tasks.
+
+**Automated Testing:**
+
+-   Set up unit tests, integration tests, and any other relevant tests for your application.
+-   Integrate the test execution into your CI/CD pipeline to ensure that changes are validated before deployment.
+
+**Webhooks and Notifications:**
+
+-   Configure webhooks to trigger your CI/CD pipeline automatically when code is pushed to specific branches.
+-   Set up notifications to receive alerts in case of pipeline failures.
+
+**Monitoring and Logging:**
+
+-   Monitor your deployed application using monitoring tools like New Relic, Datadog, or custom monitoring scripts.
+-   Set up logging to capture application logs and debug issues as they arise.
+
+**Rollback and Recovery:**
+
+-   Implement strategies for rolling back to a previous version in case of deployment failures or critical issues.
+-   Plan for disaster recovery by regularly backing up your application and database.
+
+**Documentation:**
+
+-   Document your CI/CD pipeline setup, deployment process, and any important configuration details. This will help your team understand and maintain the system.
+
+Passing from words to practice how can we create an effective CI/CD for this situation. Well i prepared a fantastic git Hook that can to be launch from local VSC and update or create new branch from local directly into GH and Droplet. 
+
+Here is the code:
+
+```plaintext
+#!/bin/bash
+
+# Get the commit message as input
+read -p "Enter the commit message: " commit_message
+
+# Get the current branch name and assign it to the central_branch variable
+central_branch=$(git rev-parse --abbrev-ref HEAD)
+
+# Ask the user whether to create a new branch or remain on the current branch
+read -p "Do you want to create a new branch? (y/n): " answer
+
+if [[ $answer == "y" ]]; then
+  # Get the name of the new branch from the user
+  read -p "Enter the name of the new branch: " new_branch
+
+  # Check if the local branch exists, if not, create it from the central branch
+  if ! git show-ref --quiet refs/heads/$new_branch; then
+    git checkout -b $new_branch $central_branch
+  else
+    git checkout $new_branch
+  fi
+
+  # Get the commit message for the new changes
+  read -p "Enter the commit message for the new changes: " new_commit_message
+
+  # Commit the changes on the new branch
+  git add .
+  git commit -m "$new_commit_message"
+
+  # Push changes to the new local branch
+  echo "Pushing changes to $new_branch"
+  git push origin $new_branch
+
+  # Switch to the new branch on the DigitalOcean droplet
+  echo "Switching to the new branch on the DigitalOcean droplet..."
+  ssh root@146.190.169.21 "cd /home/mauro/flask-app && git checkout $new_branch"
+else
+  # Commit the changes on the current branch
+  git add .
+  git commit -m "$commit_message"
+
+  # Push changes to the current branch
+  echo "Pushing changes to the current branch"
+  git push origin $(git rev-parse --abbrev-ref HEAD)
+
+  # Switch to the branch on the DigitalOcean droplet
+  echo "Switching to the current branch on the DigitalOcean droplet..."
+  ssh root@146.190.169.21 "cd /home/mauro/flask-app && git checkout $(git rev-parse --abbrev-ref HEAD)"
+fi
+
+# Pull changes from the remote central branch on GitHub
+echo "Pulling changes from origin/$central_branch"
+git pull origin $central_branch
+
+# Check if there are any conflicts after pulling
+if [ $? -eq 0 ]; then
+  # No conflicts, proceed with the push
+  # Push changes to the GitHub repository
+  echo "Pushing changes to origin/$central_branch"
+  git push origin $central_branch
+
+  # Log in to the DigitalOcean droplet and pull the changes
+  echo "Logging in to the DigitalOcean droplet..."
+  ssh root@146.190.169.21 "cd /home/mauro/flask-app && git pull"
+
+  echo "Changes successfully pushed to both GitHub and the DigitalOcean droplet."
+else
+  # Conflicts exist, prompt the user to resolve them manually
+  echo "There are conflicts after pulling. Please resolve the conflicts manually and commit the changes."
+fi
+```
+
+And here is the generate ouput that show you how it works:
+
+```plaintext
+mauro@mauro-ThinkPad-L460:~/Scrivania/flask_server_2$ bash .git/hooks/new_branch_push_to_both.sh
+Enter the commit message: "aggiunta di uwsgi.ini file"
+Do you want to create a new branch? (y/n): y
+Enter the name of the new branch: flask-with-uwsgi
+M       __pycache__/app.cpython-38.pyc
+M       database.db
+M       requirements.txt
+M       templates/index.html
+M       templates/login.html
+M       templates/logout.html
+D       venv/bin/easy_install
+D       venv/bin/easy_install-3.8
+D       venv/lib/python3.8/site-packages/__pycache__/easy_install.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/easy_install.py
+M       venv/lib/python3.8/site-packages/gunicorn/__pycache__/__init__.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/__pycache__/arbiter.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/__pycache__/config.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/__pycache__/debug.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/__pycache__/errors.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/__pycache__/glogging.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/__pycache__/pidfile.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/__pycache__/reloader.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/__pycache__/sock.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/__pycache__/systemd.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/__pycache__/util.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/app/__pycache__/__init__.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/app/__pycache__/base.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/app/__pycache__/wsgiapp.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/http/__pycache__/__init__.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/http/__pycache__/body.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/http/__pycache__/errors.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/http/__pycache__/message.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/http/__pycache__/parser.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/http/__pycache__/unreader.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/http/__pycache__/wsgi.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/workers/__pycache__/__init__.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/workers/__pycache__/base.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/workers/__pycache__/sync.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/gunicorn/workers/__pycache__/workertmp.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/pkg_resources/__init__.py
+M       venv/lib/python3.8/site-packages/pkg_resources/__pycache__/__init__.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/__pycache__/__init__.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__init__.py
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/__init__.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/_structures.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/markers.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/requirements.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/specifiers.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/utils.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/version.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/_structures.py
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/markers.py
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/requirements.py
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/specifiers.py
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/utils.py
+M       venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/version.py
+M       venv/lib/python3.8/site-packages/pkg_resources/extern/__init__.py
+M       venv/lib/python3.8/site-packages/pkg_resources/extern/__pycache__/__init__.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/AUTHORS.txt
+D       venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/INSTALLER
+D       venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/LICENSE.txt
+D       venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/METADATA
+D       venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/RECORD
+D       venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/WHEEL
+D       venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/dependency_links.txt
+D       venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/entry_points.txt
+D       venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/top_level.txt
+D       venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/zip-safe
+M       venv/lib/python3.8/site-packages/setuptools/__init__.py
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/__init__.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/__pycache__/_deprecation_warning.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/_imp.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/archive_util.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/build_meta.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/__pycache__/config.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/dep_util.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/depends.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/dist.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/errors.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/extension.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/glob.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/installer.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/launch.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/__pycache__/lib2to3_ex.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/monkey.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/msvc.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/namespaces.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/package_index.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/__pycache__/py27compat.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/__pycache__/py31compat.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/__pycache__/py33compat.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/__pycache__/py34compat.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/sandbox.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/__pycache__/site-patch.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/__pycache__/ssl_support.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/unicode_utils.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/version.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/wheel.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/__pycache__/windows_support.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/_deprecation_warning.py
+M       venv/lib/python3.8/site-packages/setuptools/_imp.py
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/__pycache__/__init__.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/__pycache__/ordered_set.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/_vendor/__pycache__/pyparsing.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/_vendor/__pycache__/six.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__about__.py
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__init__.py
+D       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/__about__.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/__init__.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/_compat.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/_structures.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/markers.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/requirements.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/specifiers.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/tags.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/utils.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/version.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/_compat.py
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/_structures.py
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/markers.py
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/requirements.py
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/specifiers.py
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/tags.py
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/utils.py
+M       venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/version.py
+D       venv/lib/python3.8/site-packages/setuptools/_vendor/pyparsing.py
+D       venv/lib/python3.8/site-packages/setuptools/_vendor/six.py
+M       venv/lib/python3.8/site-packages/setuptools/archive_util.py
+M       venv/lib/python3.8/site-packages/setuptools/build_meta.py
+M       venv/lib/python3.8/site-packages/setuptools/cli-32.exe
+M       venv/lib/python3.8/site-packages/setuptools/cli-64.exe
+M       venv/lib/python3.8/site-packages/setuptools/cli.exe
+M       venv/lib/python3.8/site-packages/setuptools/command/__init__.py
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/__init__.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/alias.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/bdist_egg.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/bdist_rpm.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/bdist_wininst.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/build_clib.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/build_ext.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/build_py.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/develop.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/dist_info.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/easy_install.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/egg_info.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/install.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/install_egg_info.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/install_lib.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/install_scripts.cpython-38.pyc
+D       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/py36compat.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/register.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/rotate.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/saveopts.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/sdist.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/setopt.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/test.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/upload.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/__pycache__/upload_docs.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/command/alias.py
+M       venv/lib/python3.8/site-packages/setuptools/command/bdist_egg.py
+M       venv/lib/python3.8/site-packages/setuptools/command/bdist_rpm.py
+D       venv/lib/python3.8/site-packages/setuptools/command/bdist_wininst.py
+M       venv/lib/python3.8/site-packages/setuptools/command/build_clib.py
+M       venv/lib/python3.8/site-packages/setuptools/command/build_ext.py
+M       venv/lib/python3.8/site-packages/setuptools/command/build_py.py
+M       venv/lib/python3.8/site-packages/setuptools/command/develop.py
+M       venv/lib/python3.8/site-packages/setuptools/command/dist_info.py
+M       venv/lib/python3.8/site-packages/setuptools/command/easy_install.py
+M       venv/lib/python3.8/site-packages/setuptools/command/egg_info.py
+M       venv/lib/python3.8/site-packages/setuptools/command/install.py
+M       venv/lib/python3.8/site-packages/setuptools/command/install_egg_info.py
+M       venv/lib/python3.8/site-packages/setuptools/command/install_lib.py
+M       venv/lib/python3.8/site-packages/setuptools/command/install_scripts.py
+D       venv/lib/python3.8/site-packages/setuptools/command/py36compat.py
+M       venv/lib/python3.8/site-packages/setuptools/command/rotate.py
+M       venv/lib/python3.8/site-packages/setuptools/command/saveopts.py
+M       venv/lib/python3.8/site-packages/setuptools/command/sdist.py
+M       venv/lib/python3.8/site-packages/setuptools/command/setopt.py
+M       venv/lib/python3.8/site-packages/setuptools/command/test.py
+M       venv/lib/python3.8/site-packages/setuptools/command/upload_docs.py
+D       venv/lib/python3.8/site-packages/setuptools/config.py
+M       venv/lib/python3.8/site-packages/setuptools/dep_util.py
+M       venv/lib/python3.8/site-packages/setuptools/depends.py
+M       venv/lib/python3.8/site-packages/setuptools/dist.py
+M       venv/lib/python3.8/site-packages/setuptools/errors.py
+M       venv/lib/python3.8/site-packages/setuptools/extension.py
+M       venv/lib/python3.8/site-packages/setuptools/extern/__init__.py
+M       venv/lib/python3.8/site-packages/setuptools/extern/__pycache__/__init__.cpython-38.pyc
+M       venv/lib/python3.8/site-packages/setuptools/glob.py
+M       venv/lib/python3.8/site-packages/setuptools/gui-32.exe
+M       venv/lib/python3.8/site-packages/setuptools/gui-64.exe
+M       venv/lib/python3.8/site-packages/setuptools/gui.exe
+M       venv/lib/python3.8/site-packages/setuptools/installer.py
+M       venv/lib/python3.8/site-packages/setuptools/launch.py
+D       venv/lib/python3.8/site-packages/setuptools/lib2to3_ex.py
+M       venv/lib/python3.8/site-packages/setuptools/monkey.py
+M       venv/lib/python3.8/site-packages/setuptools/msvc.py
+M       venv/lib/python3.8/site-packages/setuptools/namespaces.py
+M       venv/lib/python3.8/site-packages/setuptools/package_index.py
+D       venv/lib/python3.8/site-packages/setuptools/py27compat.py
+D       venv/lib/python3.8/site-packages/setuptools/py31compat.py
+D       venv/lib/python3.8/site-packages/setuptools/py33compat.py
+D       venv/lib/python3.8/site-packages/setuptools/py34compat.py
+M       venv/lib/python3.8/site-packages/setuptools/sandbox.py
+D       venv/lib/python3.8/site-packages/setuptools/site-patch.py
+D       venv/lib/python3.8/site-packages/setuptools/ssl_support.py
+M       venv/lib/python3.8/site-packages/setuptools/unicode_utils.py
+M       venv/lib/python3.8/site-packages/setuptools/version.py
+M       venv/lib/python3.8/site-packages/setuptools/wheel.py
+M       venv/lib/python3.8/site-packages/setuptools/windows_support.py
+Si è passati a un nuovo branch 'flask-with-uwsgi'
+Enter the commit message for the new changes: "nuova brach con uwsgi"
+[flask-with-uwsgi e05ec1d] "nuova brach con uwsgi"
+ 586 files changed, 64480 insertions(+), 14628 deletions(-)
+ rewrite __pycache__/app.cpython-38.pyc (69%)
+ create mode 100644 error_log.log
+ create mode 100644 python_utils/directory_tree.py
+ rewrite templates/login.html (66%)
+ create mode 100644 uwsgi.ini
+ delete mode 100755 venv/bin/easy_install
+ create mode 100755 venv/bin/uwsgi
+ rename venv/bin/{easy_install-3.8 => wheel} (81%)
+ delete mode 100644 venv/lib/python3.8/site-packages/__pycache__/easy_install.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/__pycache__/uwsgidecorators.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/_distutils_hack/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/_distutils_hack/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/_distutils_hack/__pycache__/override.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/_distutils_hack/override.py
+ create mode 100644 venv/lib/python3.8/site-packages/distutils-precedence.pth
+ delete mode 100644 venv/lib/python3.8/site-packages/easy_install.py
+ rewrite venv/lib/python3.8/site-packages/gunicorn/__pycache__/__init__.cpython-38.pyc (60%)
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/__pycache__/typing_extensions.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/__pycache__/zipp.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/__pycache__/_adapters.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/__pycache__/_common.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/__pycache__/_compat.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/__pycache__/_itertools.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/__pycache__/_legacy.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/__pycache__/abc.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/__pycache__/readers.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/__pycache__/simple.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/_adapters.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/_common.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/_compat.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/_itertools.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/_legacy.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/abc.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/readers.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/importlib_resources/simple.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/jaraco/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/jaraco/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/jaraco/__pycache__/context.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/jaraco/__pycache__/functools.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/jaraco/context.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/jaraco/functools.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/jaraco/text/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/jaraco/text/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/more_itertools/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/more_itertools/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/more_itertools/__pycache__/more.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/more_itertools/__pycache__/recipes.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/more_itertools/more.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/more_itertools/recipes.py
+ rename venv/lib/python3.8/site-packages/{setuptools/_vendor/packaging/__about__.py => pkg_resources/_vendor/packaging/__init__.py} (52%)
+ rewrite venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/__init__.cpython-38.pyc (99%)
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/_elffile.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/_manylinux.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/_musllinux.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/_parser.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/_structures.cpython-38.pyc (99%)
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/_tokenizer.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/markers.cpython-38.pyc (93%)
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/metadata.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/requirements.cpython-38.pyc (93%)
+ rewrite venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/specifiers.cpython-38.pyc (79%)
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/tags.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/utils.cpython-38.pyc (99%)
+ rewrite venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/__pycache__/version.cpython-38.pyc (89%)
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/_elffile.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/_manylinux.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/_musllinux.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/_parser.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/_tokenizer.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/metadata.py
+ rewrite venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/requirements.py (76%)
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/packaging/tags.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/__main__.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/__pycache__/__main__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/__pycache__/android.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/__pycache__/api.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/__pycache__/macos.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/__pycache__/unix.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/__pycache__/version.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/__pycache__/windows.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/android.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/api.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/macos.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/unix.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/version.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/platformdirs/windows.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/typing_extensions.py
+ create mode 100644 venv/lib/python3.8/site-packages/pkg_resources/_vendor/zipp.py
+ rewrite venv/lib/python3.8/site-packages/pkg_resources/extern/__pycache__/__init__.cpython-38.pyc (74%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/AUTHORS.txt
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/LICENSE.txt
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/METADATA
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/RECORD
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools-44.0.0.dist-info/dependency_links.txt
+ rename venv/lib/python3.8/site-packages/{setuptools-44.0.0.dist-info => setuptools-68.1.2.dist-info}/INSTALLER (100%)
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools-68.1.2.dist-info/LICENSE
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools-68.1.2.dist-info/METADATA
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools-68.1.2.dist-info/RECORD
+ rename venv/lib/python3.8/site-packages/{setuptools-44.0.0.dist-info => setuptools-68.1.2.dist-info}/WHEEL (54%)
+ rename venv/lib/python3.8/site-packages/{setuptools-44.0.0.dist-info => setuptools-68.1.2.dist-info}/entry_points.txt (80%)
+ rename venv/lib/python3.8/site-packages/{setuptools-44.0.0.dist-info => setuptools-68.1.2.dist-info}/top_level.txt (60%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/__init__.cpython-38.pyc (91%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/_deprecation_warning.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/_entry_points.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/_imp.cpython-38.pyc (95%)
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/_importlib.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/_itertools.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/_normalization.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/_path.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/_reqs.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/archive_util.cpython-38.pyc (62%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/build_meta.cpython-38.pyc (80%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/config.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/discovery.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/dist.cpython-38.pyc (79%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/errors.cpython-38.pyc (60%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/extension.cpython-38.pyc (76%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/installer.cpython-38.pyc (95%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/lib2to3_ex.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/logging.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/monkey.cpython-38.pyc (77%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/namespaces.cpython-38.pyc (68%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/package_index.cpython-38.pyc (71%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/py27compat.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/py312compat.cpython-38.pyc
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/py31compat.cpython-38.pyc
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/py33compat.cpython-38.pyc
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/py34compat.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/sandbox.cpython-38.pyc (68%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/site-patch.cpython-38.pyc
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/ssl_support.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/unicode_utils.cpython-38.pyc (86%)
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/__pycache__/warnings.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/wheel.cpython-38.pyc (78%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/__pycache__/windows_support.cpython-38.pyc (85%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/_deprecation_warning.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/_collections.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/_functools.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/_log.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/_macos_compat.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/_msvccompiler.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/archive_util.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/bcppcompiler.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/ccompiler.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/cmd.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/config.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/core.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/cygwinccompiler.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/debug.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/dep_util.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/dir_util.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/dist.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/errors.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/extension.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/fancy_getopt.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/file_util.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/filelist.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/log.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/msvc9compiler.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/msvccompiler.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/py38compat.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/py39compat.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/spawn.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/sysconfig.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/text_file.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/unixccompiler.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/util.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/version.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/__pycache__/versionpredicate.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/_collections.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/_functools.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/_log.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/_macos_compat.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/_msvccompiler.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/archive_util.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/bcppcompiler.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/ccompiler.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/cmd.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/_framework_compat.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/bdist.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/bdist_dumb.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/bdist_rpm.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/build.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/build_clib.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/build_ext.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/build_py.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/build_scripts.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/check.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/clean.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/config.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/install.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/install_data.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/install_egg_info.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/install_headers.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/install_lib.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/install_scripts.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/py37compat.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/register.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/sdist.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/__pycache__/upload.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/_framework_compat.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/bdist.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/bdist_dumb.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/bdist_rpm.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/build.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/build_clib.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/build_ext.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/build_py.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/build_scripts.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/check.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/clean.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/config.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/install.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/install_data.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/install_egg_info.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/install_headers.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/install_lib.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/install_scripts.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/py37compat.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/register.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/sdist.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/command/upload.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/config.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/core.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/cygwinccompiler.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/debug.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/dep_util.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/dir_util.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/dist.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/errors.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/extension.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/fancy_getopt.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/file_util.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/filelist.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/log.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/msvc9compiler.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/msvccompiler.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/py38compat.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/py39compat.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/spawn.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/sysconfig.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/text_file.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/unixccompiler.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/util.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/version.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_distutils/versionpredicate.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_entry_points.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_importlib.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_itertools.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_normalization.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_path.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_reqs.py
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/__pycache__/pyparsing.cpython-38.pyc
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/__pycache__/six.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/__pycache__/typing_extensions.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/__pycache__/zipp.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/__pycache__/_adapters.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/__pycache__/_collections.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/__pycache__/_compat.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/__pycache__/_functools.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/__pycache__/_itertools.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/__pycache__/_meta.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/__pycache__/_py39compat.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/__pycache__/_text.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/_adapters.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/_collections.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/_compat.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/_functools.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/_itertools.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/_meta.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/_py39compat.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_metadata/_text.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/__pycache__/_adapters.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/__pycache__/_common.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/__pycache__/_compat.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/__pycache__/_itertools.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/__pycache__/_legacy.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/__pycache__/abc.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/__pycache__/readers.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/__pycache__/simple.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/_adapters.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/_common.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/_compat.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/_itertools.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/_legacy.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/abc.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/readers.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/importlib_resources/simple.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/jaraco/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/jaraco/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/jaraco/__pycache__/context.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/jaraco/__pycache__/functools.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/jaraco/context.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/jaraco/functools.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/jaraco/text/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/jaraco/text/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/more_itertools/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/more_itertools/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/more_itertools/__pycache__/more.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/more_itertools/__pycache__/recipes.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/more_itertools/more.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/more_itertools/recipes.py
+ rewrite venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__init__.py (67%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/__about__.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/__init__.cpython-38.pyc (99%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/_compat.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/_elffile.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/_manylinux.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/_musllinux.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/_parser.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/_structures.cpython-38.pyc (99%)
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/_tokenizer.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/markers.cpython-38.pyc (93%)
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/metadata.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/requirements.cpython-38.pyc (93%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/specifiers.cpython-38.pyc (79%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/tags.cpython-38.pyc (96%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/utils.cpython-38.pyc (91%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/__pycache__/version.cpython-38.pyc (90%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/_compat.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/_elffile.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/_manylinux.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/_musllinux.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/_parser.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/_tokenizer.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/metadata.py
+ rewrite venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/requirements.py (71%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/_vendor/packaging/tags.py (69%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/pyparsing.py
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/six.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/tomli/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/tomli/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/tomli/__pycache__/_parser.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/tomli/__pycache__/_re.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/tomli/__pycache__/_types.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/tomli/_parser.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/tomli/_re.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/tomli/_types.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/typing_extensions.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/_vendor/zipp.py
+ rewrite venv/lib/python3.8/site-packages/setuptools/cli-32.exe (98%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/cli-64.exe (98%)
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/cli-arm64.exe
+ rewrite venv/lib/python3.8/site-packages/setuptools/cli.exe (98%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__init__.py (80%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/__init__.cpython-38.pyc (99%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/alias.cpython-38.pyc (66%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/bdist_egg.cpython-38.pyc (69%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/bdist_rpm.cpython-38.pyc (85%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/command/__pycache__/bdist_wininst.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/command/__pycache__/build.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/build_ext.cpython-38.pyc (87%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/build_py.cpython-38.pyc (84%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/develop.cpython-38.pyc (75%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/dist_info.cpython-38.pyc (94%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/easy_install.cpython-38.pyc (70%)
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/command/__pycache__/editable_wheel.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/egg_info.cpython-38.pyc (78%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/install.cpython-38.pyc (71%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/install_egg_info.cpython-38.pyc (92%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/install_lib.cpython-38.pyc (72%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/install_scripts.cpython-38.pyc (86%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/command/__pycache__/py36compat.cpython-38.pyc
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/rotate.cpython-38.pyc (71%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/sdist.cpython-38.pyc (83%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/setopt.cpython-38.pyc (76%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/test.cpython-38.pyc (67%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/command/__pycache__/upload_docs.cpython-38.pyc (79%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/command/bdist_wininst.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/command/build.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/command/editable_wheel.py
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/command/py36compat.py
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/config.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/__pycache__/_apply_pyprojecttoml.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/__pycache__/expand.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/__pycache__/pyprojecttoml.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/__pycache__/setupcfg.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/_apply_pyprojecttoml.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/_validate_pyproject/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/_validate_pyproject/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/_validate_pyproject/__pycache__/error_reporting.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/_validate_pyproject/__pycache__/extra_validations.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/_validate_pyproject/__pycache__/fastjsonschema_exceptions.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/_validate_pyproject/__pycache__/fastjsonschema_validations.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/_validate_pyproject/__pycache__/formats.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/_validate_pyproject/error_reporting.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/_validate_pyproject/extra_validations.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/_validate_pyproject/fastjsonschema_exceptions.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/_validate_pyproject/fastjsonschema_validations.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/_validate_pyproject/formats.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/expand.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/pyprojecttoml.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/config/setupcfg.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/discovery.py
+ rewrite venv/lib/python3.8/site-packages/setuptools/extern/__pycache__/__init__.cpython-38.pyc (74%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/gui-32.exe (98%)
+ rewrite venv/lib/python3.8/site-packages/setuptools/gui-64.exe (98%)
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/gui-arm64.exe
+ rewrite venv/lib/python3.8/site-packages/setuptools/gui.exe (98%)
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/lib2to3_ex.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/logging.py
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/py27compat.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/py312compat.py
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/py31compat.py
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/py33compat.py
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/py34compat.py
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/site-patch.py
+ delete mode 100644 venv/lib/python3.8/site-packages/setuptools/ssl_support.py
+ create mode 100644 venv/lib/python3.8/site-packages/setuptools/warnings.py
+ create mode 100644 venv/lib/python3.8/site-packages/uWSGI-2.0.22.egg-info/PKG-INFO
+ create mode 100644 venv/lib/python3.8/site-packages/uWSGI-2.0.22.egg-info/SOURCES.txt
+ rename venv/lib/python3.8/site-packages/{setuptools-44.0.0.dist-info/zip-safe => uWSGI-2.0.22.egg-info/dependency_links.txt} (100%)
+ create mode 100644 venv/lib/python3.8/site-packages/uWSGI-2.0.22.egg-info/installed-files.txt
+ create mode 100644 venv/lib/python3.8/site-packages/uWSGI-2.0.22.egg-info/top_level.txt
+ create mode 100644 venv/lib/python3.8/site-packages/uwsgidecorators.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel-0.41.2.dist-info/INSTALLER
+ create mode 100644 venv/lib/python3.8/site-packages/wheel-0.41.2.dist-info/LICENSE.txt
+ create mode 100644 venv/lib/python3.8/site-packages/wheel-0.41.2.dist-info/METADATA
+ create mode 100644 venv/lib/python3.8/site-packages/wheel-0.41.2.dist-info/RECORD
+ create mode 100644 venv/lib/python3.8/site-packages/wheel-0.41.2.dist-info/WHEEL
+ create mode 100644 venv/lib/python3.8/site-packages/wheel-0.41.2.dist-info/entry_points.txt
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/__main__.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/__pycache__/__main__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/__pycache__/_setuptools_logging.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/__pycache__/bdist_wheel.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/__pycache__/macosx_libfile.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/__pycache__/metadata.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/__pycache__/util.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/__pycache__/wheelfile.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/_setuptools_logging.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/bdist_wheel.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/cli/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/cli/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/cli/__pycache__/convert.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/cli/__pycache__/pack.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/cli/__pycache__/tags.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/cli/__pycache__/unpack.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/cli/convert.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/cli/pack.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/cli/tags.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/cli/unpack.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/macosx_libfile.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/metadata.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/util.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__init__.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__pycache__/__init__.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__pycache__/_elffile.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__pycache__/_manylinux.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__pycache__/_musllinux.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__pycache__/_parser.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__pycache__/_structures.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__pycache__/_tokenizer.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__pycache__/markers.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__pycache__/requirements.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__pycache__/specifiers.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__pycache__/tags.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__pycache__/utils.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/__pycache__/version.cpython-38.pyc
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/_elffile.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/_manylinux.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/_musllinux.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/_parser.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/_structures.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/_tokenizer.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/markers.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/requirements.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/specifiers.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/tags.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/utils.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/packaging/version.py
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/vendored/vendor.txt
+ create mode 100644 venv/lib/python3.8/site-packages/wheel/wheelfile.py
+Pushing changes to flask-with-uwsgi
+Enumerazione degli oggetti in corso: 652, fatto.
+Conteggio degli oggetti in corso: 100% (652/652), fatto.
+Compressione delta in corso, uso fino a 4 thread
+Compressione oggetti in corso: 100% (573/573), fatto.
+Scrittura degli oggetti in corso: 100% (580/580), 1.95 MiB | 779.00 KiB/s, fatto.
+580 oggetti totali (113 delta), 0 riutilizzati (0 delta)
+remote: Resolving deltas: 100% (113/113), completed with 44 local objects.
+remote: 
+remote: Create a pull request for 'flask-with-uwsgi' on GitHub by visiting:
+remote:      https://github.com/progettazionemauro/flask_template/pull/new/flask-with-uwsgi
+remote: 
+To https://github.com/progettazionemauro/flask_template.git
+ * [new branch]      flask-with-uwsgi -> flask-with-uwsgi
+Switching to the new branch on the DigitalOcean droplet...
+error: pathspec 'flask-with-uwsgi' did not match any file(s) known to git
+Pulling changes from origin/navbar-flask
+Da https://github.com/progettazionemauro/flask_template
+ * branch            navbar-flask -> FETCH_HEAD
+Già aggiornato.
+Pushing changes to origin/navbar-flask
+Everything up-to-date
+Logging in to the DigitalOcean droplet...
+From https://github.com/progettazionemauro/flask_template
+ * [new branch]      flask-with-uwsgi -> droplet/flask-with-uwsgi
+Already up to date.
+Changes successfully pushed to both GitHub and the DigitalOcean droplet.
+```
+
+## So given this we are ready to start for droplet configuration
+
+## DO Droplet - Flask Nginx reconfiguration
+
+Here's what you can do in DO Droplet: in the default server block, you should replace the content of the `**location /**` block to point to your Flask project's uWSGI socket. This way, Nginx will route requests to your Flask application.
+
+Modify this section:
+
+```plaintext
+location / {
+    # First attempt to serve request as file, then
+    # as directory, then fall back to displaying a 404.
+    try_files $uri $uri/ =404;
+}
+```
+
+with this:
+
+```plaintext
+location / {
+   include uwsgi_params;
+   uwsgi_pass unix:/path/to/your/flask/uwsgi.sock;  # Use the correct socket path
+}
+```
+
+#### (Follow the main commands)
+
+List the enabled Nginx server block symlinks in the `**sites-enabled**` directory:
+
+```plaintext
+ls /etc/nginx/sites-enabled
+```
+
+View the contents of a specific enabled server block (replace `**<enabled_config>**` with the actual symlink name):
+
+```plaintext
+cat /etc/nginx/sites-enabled/<enabled_config>
+```
+
+**Check uWSGI Configuration**:
+
+-   If your Flask project is using uWSGI, check the uWSGI configuration file to see the socket path and other settings:
+
+```plaintext
+cat /path/to/your/flask/uwsgi.ini
+```
+
+**Check Static and Media File Paths**:
+
+-   Verify the paths for serving static and media files in the Nginx configuration.
+
+**Review Server Name and Location Blocks**:
+
+-   In the Nginx configuration files, review the `**server_name**` and `**location**` blocks to see how requests are being routed.
+
+These commands should help you inspect and understand the current Nginx configuration for your Flask project. Make sure to replace placeholders such as `**<config_file>**` and `**<enabled_config>**` with actual values specific to your setup. As you review the configuration, pay attention to any potential conflicts or issues that might arise when adding a new Django project configuration.

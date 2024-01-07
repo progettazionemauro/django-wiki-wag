@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Schemi Certificativi</h2>
+  <ul>
+    {% for schema in object_list %}
+      <h2>{{ schema.title }}</h2>
+      <p>ID NUMERO: {{ schema.id }} - {{ schema.schema_certificazione }}</p>
+      <!-- Display other attributes as needed -->
+    {% empty %}
+      <li> Schemi non presenti.</li>
+    {% endfor %}
+  </ul>
+  
+{% endblock %}

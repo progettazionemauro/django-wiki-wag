@@ -1,0 +1,126 @@
+<!-- auditor_list.html -->
+{% extends 'base.html' %}
+
+{% block title %}Auditor List{% endblock %}
+
+
+{% block content %}
+<h2>Elenco Auditor</h2>
+<ul>
+    {% for auditor in object_list %}
+    <li>
+        <p>ID NUMERO: {{ auditor.id }}</p>
+        <p>Nome: {{ auditor.nome_auditor }}</p>
+        <p>Email: {{ auditor.email_auditor }}</p>
+        <!-- Display other attributes as needed -->
+    </li>
+    {% empty %}
+    <li>Non ho trovato auditors.</li>
+    {% endfor %}
+</ul>
+{% endblock %}
+
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My Django App</title>
+  <!-- Add Bootstrap CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light" style="background-color: #FFC0CB;">
+    <a class="navbar-brand" href="#">My Django App</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav">
+        <li class="nav-item">
+            <a class="nav-link" href="/home_page/">/////</a>
+          </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/schema_certificativo/">Schema Certificativo List</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/auditor_list/">Auditor List</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/schema_certificativo/create/">Create Schema Certificativo</a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container">
+    {% block content %}
+    {% endblock %}
+  </div>
+
+  <!-- Add Bootstrap JS -->
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Create Schema Certificativo</h2>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Create</button>
+  </form>
+{% endblock %}
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Delete Schema Certificativo</h2>
+  <p>Are you sure you want to delete "{{ schema_certificativo }}"?</p>
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit">Delete</button>
+  </form>
+{% endblock %}
+{% extends 'base.html' %}
+
+{% block content %}
+  <h1>Welcome to the Home Page</h1>
+  <ul>
+    <li><a href="/schema_certificativo/">Schema Certificativo List</a></li>
+    <li><a href="/auditor_list/">Auditor List</a></li>
+    <li><a href="/schema_certificativo/create/">Create Schema Certificativo</a></li>
+  </ul>
+{% endblock %}
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>{{ schema.title }}</h2>
+  <p>ID NUMERO: {{ schema.id }} - {{ schema.schema_certificazione }}</p>
+  <!-- Display other attributes as needed -->
+{% endblock %}
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Schemi Certificativi</h2>
+  <ul>
+    {% for schema in object_list %}
+      <h2>{{ schema.title }}</h2>
+      <p>ID NUMERO: {{ schema.id }} - {{ schema.schema_certificazione }}</p>
+      <!-- Display other attributes as needed -->
+    {% empty %}
+      <li> Schemi non presenti.</li>
+    {% endfor %}
+  </ul>
+{% endblock %}
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Update Schema Certificativo</h2>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Update</button>
+  </form>
+{% endblock %}

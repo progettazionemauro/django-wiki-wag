@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Elenco Auditor</h2>
+<ul>
+  {% for auditor in object_list %}
+    <li>
+      <p>ID NUMERO: {{ auditor.id }}</p>
+      <p>Nome: {{ auditor.nome_auditor }}</p>
+      <p>Email: {{ auditor.email_auditor }}</p> 
+      <!-- Display other attributes as needed -->
+    </li>
+  {% empty %}
+    <li>Non ho trovato auditors.</li>
+  {% endfor %}
+</ul>
+
+{% endblock %}

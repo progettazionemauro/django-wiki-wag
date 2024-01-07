@@ -1,0 +1,15 @@
+{% block content %}
+    <h1>Outreachy Internship Guide</h1>
+
+    <!-- Static or dynamically generated ToC -->
+    <h2 id='toc'>Table of Contents</h2>
+    <ol>
+        <!-- List items -->
+    </ol>
+    <hr>
+
+    <!-- Dynamic content section -->
+    {% for block in page.dynamic_content %}
+        {% include_block block %}
+    {% endfor %}
+{% endblock %}

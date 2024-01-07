@@ -1,0 +1,12 @@
+{# typed_table_block.html #}
+{% for row in table %}
+    <table>
+        <tr>
+            {% for cell in row %}
+                <td>{{ cell }}</td>
+            {% endfor %}
+        </tr>
+    </table>
+{% endfor %}
+
+

@@ -1,0 +1,8 @@
+{% extends "wagtailadmin/base.html" %}
+{% block content %}
+<form method="post" action="{% url 'convert_blocks' %}">
+    {% csrf_token %}
+    <!-- Provide form fields to select page and block to convert -->
+    <input type="submit" value="Convert Block">
+</form>
+{% endblock %}

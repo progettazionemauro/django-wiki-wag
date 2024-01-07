@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% load wagtailcore_tags %}
+
+{% block body_class %}template-blogpage{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <div class="row">
+            <div class="col-md-3">
+                <!-- Table of Contents -->
+                <div id="tableOfContents">
+                    <h2>Table of Contents</h2>
+                    <ul>
+                        <!-- JavaScript will populate this list -->
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-9">
+                <article>
+                    {% for block in page.body %}
+                        <section class="{{ block.block_type }}">
+                            {% include_block block %}
+                        </section>
+                    {% endfor %}
+                </article>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tableOfContents = document.getElementById('tableOfContents');
+        const headings = document.querySelectorAll('h2, h3, h4, h5, h6');
+
+        headings.forEach((heading, index) => {
+            const listItem = document.createElement('li');
+            const link = document.createElement('a');
+            link.textContent = heading.textContent;
+            link.href = `#section${index + 1}`;
+            listItem.appendChild(link);
+            tableOfContents.querySelector('ul').appendChild(listItem);
+        });
+    </script>
+{% endblock %}

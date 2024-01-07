@@ -1,0 +1,23 @@
+ {% extends "base.html" %}
+ {% load wagtailcore_tags wiki_tags %}
+ 
+ {% block content %}
+     <h1>{{ page.title }}</h1>
+ 
+     <!-- Use 'with' to apply 'extract_headings' and store the result in a variable -->
+     {% with headings=page.content|extract_headings %}
+         <!-- Generate Table of Contents -->
+         <div id="toc">
+             <h2>Table of Contents</h2>
+             <ul>
+                 {% for heading in headings %}
+                     <li>{{ heading }}</li>
+                 {% endfor %}
+             </ul>
+         </div>
+     {% endwith %}
+ 
+     <hr>
+     <div>{{ page.content|richtext }}</div>
+ {% endblock %}
+ 

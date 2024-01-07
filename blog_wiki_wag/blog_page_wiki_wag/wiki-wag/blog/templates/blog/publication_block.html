@@ -1,0 +1,19 @@
+{% load wagtailcore_tags %}
+
+<p>This is the publication block template</p>
+
+{% if value.linked_page %}
+    <p>Linked Page: {{ value.linked_page.title }}</p>
+    <a href="{{ value.linked_page.url }}">
+        {{ value.title }}
+    </a>
+    <hr>
+    Title: {{ value.title }}
+    <br>
+    URL: {{ value.linked_page.url }}
+    <hr>
+{% else %}
+    <p>No Linked Page selected</p>
+    {# Handle the case where no linked page is provided #}
+    <span>{{ value.title }}</span>
+{% endif %}
