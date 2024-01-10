@@ -1559,7 +1559,7 @@ class BlogPage(Page):
 ```
 [^Removal of special-purpose field panel types]: Removal of special-purpose field panel typesThe panel types `StreamFieldPanel`, `RichTextFieldPanel`, `ImageChooserPanel`, `DocumentChooserPanel` and `SnippetChooserPanel` have been phased out, and can now be replaced with `FieldPanel`. Additionally, `PageChooserPanel` is only required when passing a `page_type` or `can_choose_root`, and can otherwise be replaced with `FieldPanel`. In all cases, `FieldPanel` will now automatically select the most appropriate form element. This feature was developed by Matt Westcott.
 
-**Step 5: **Go in the Wagtail manage.py level** and make sure to run migrations after making these changes:
+**Step 5: **Go in the **Wagtail manage.py level** and make sure to run migrations after making these changes:
 
 ```
 python3 manage.py makemigrations
@@ -1654,7 +1654,7 @@ class FixedTableContent(models.Model):
 Create an admin class for your new model in the `admin.py` file:
 
 ```python
-pythonCopy code# admin.py
+# admin.py
 
 from django.contrib import admin
 from .models import FixedTableContent

@@ -69,7 +69,7 @@ MIDDLEWARE = [
     'wagtail.contrib.redirects.middleware.RedirectMiddleware',
 ]
 
-WAGTAILADMIN_BASE_URL = 'http://localhost/wagtail-admin/'
+WAGTAILADMIN_BASE_URL = 'http://localhost:8/wagtail-admin/'
 ROOT_URLCONF = 'general_template1.urls'
 
 TEMPLATES = [
