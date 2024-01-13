@@ -34,7 +34,7 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # Application definition
 
 INSTALLED_APPS = [
-    #'wiki-wag',
+    
     'wagtail.contrib.forms',
     'wagtail.contrib.redirects',
     'wagtail.embeds',
@@ -141,35 +141,9 @@ USE_TZ = True
 STATIC_URL = 'static/'
 MEDIA_URL = '/media/'
 
-ADMINS = [
-    # ('Your Name', 'your_email@example.com'),
-]
-MANAGERS = ADMINS
-
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# WAGTAIL SETTINGS
 
-# This is the human-readable name of your Wagtail install
-# which welcomes users upon login to the Wagtail admin.
-WAGTAIL_SITE_NAME = 'My Project'
-
-# Replace the search backend
-#WAGTAILSEARCH_BACKENDS = {
-#  'default': {
-#    'BACKEND': 'wagtail.search.backends.elasticsearch8',
-#    'INDEX': 'myapp'
-#  }
-#}
-
-# Wagtail email notifications from address
-# WAGTAILADMIN_NOTIFICATION_FROM_EMAIL = 'wagtail@myhost.io'
-
-# Wagtail email notification format
-# WAGTAILADMIN_NOTIFICATION_USE_HTML = True
-
-# Reverse the default case-sensitive handling of tags
-TAGGIT_CASE_INSENSITIVE = True

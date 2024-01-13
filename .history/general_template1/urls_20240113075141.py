@@ -14,7 +14,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('wagtail-admin/', include(wagtailadmin_urls)),
     path('documents/', include(wagtaildocs_urls)),
-   # path("search/", search_views.search, name="search"), # Fix the import here
+     path('search/', wagtail_search_views.search_view, name='search'),  # Fix the import here
     re_path(r'^pages/', include(wagtail_urls)),  # Assuming your Wagtail pages have a path starting with 'pages/'
     # Add other app-specific URLs here if needed
     re_path(r'^', include(wagtail_urls)),  # Catch-all for remaining URLs, including the homepage
